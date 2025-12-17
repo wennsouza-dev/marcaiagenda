@@ -322,21 +322,23 @@ const App: React.FC = () => {
       );
       case AppView.CLIENTS: return (
         <div className="max-w-7xl mx-auto py-12 px-4">
-          <h2 className="text-3xl font-bold text-slate-900 mb-8">Marketplace</h2>
-          <div className="bg-white p-4 rounded-2xl shadow-sm mb-10 border border-slate-100 grid md:grid-cols-4 gap-4">
-            <input placeholder="Nome, Salão ou Serviço..." className="w-full col-span-2 px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-            <select className="px-4 py-3 border border-slate-200 rounded-xl" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
+          <h2 className="text-4xl font-black text-slate-900 mb-8">Olá, cliente MarcAI!</h2>
+          <div className="bg-white p-4 rounded-3xl shadow-sm mb-12 border border-slate-100 grid md:grid-cols-4 gap-4">
+            <div className="col-span-2 relative">
+              <input placeholder="Nome, Salão ou Serviço..." className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            </div>
+            <select className="px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-600 font-medium cursor-pointer" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
               <option value="">Todas Cidades</option>
               {cities.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select className="px-4 py-3 border border-slate-200 rounded-xl" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <select className="px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-600 font-medium cursor-pointer" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
               <option value="">Categorias</option>
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredProfessionals.map((prof) => (
-              <ProfessionalCard key={prof.id} professional={prof} onSelect={setSelectedProfessional} />
+              <ProfessionalCard key={prof.id} professional={prof} onSelect={(p) => setSelectedProfessional(p)} />
             ))}
           </div>
         </div>
