@@ -5,6 +5,7 @@ export interface Service {
   duration: number; // em minutos
   price: number;
   preBooking?: boolean;
+  preBookingRules?: string;
 }
 
 export interface Professional {

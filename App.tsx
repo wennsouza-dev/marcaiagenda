@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Layout from './components/Layout.tsx';
 import ProfessionalCard from './components/ProfessionalCard.tsx';
 import AIAssistant from './components/AIAssistant.tsx';
@@ -155,13 +155,18 @@ const DeveloperPanel: React.FC<{
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.LANDING);
-  const [dashboardTab, setDashboardTab] = useState<'agendamentos' | 'perfil' | 'horarios'>('agendamentos');
+  const [dashboardTab, setDashboardTab] = useState<'agendamentos' | 'perfil' | 'horarios' | 'galeria'>('agendamentos');
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const serviceRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // States for Profile configuration
   const [profileData, setProfileData] = useState({
@@ -169,7 +174,8 @@ const App: React.FC = () => {
     whatsapp: '',
     address: '',
     customLink: 'meulink',
-    services: [] as Service[]
+    services: [] as Service[],
+    photo: 'https://picsum.photos/seed/marcos/100'
   });
 
   // States for Schedule configuration
@@ -178,6 +184,9 @@ const App: React.FC = () => {
   );
   const [lunchBreak, setLunchBreak] = useState({ active: false, start: '12:00', end: '13:00' });
   const [specialHours, setSpecialHours] = useState([{ date: '', open: '', close: '', closed: false }]);
+  
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [earningsMonth, setEarningsMonth] = useState('06/2024');
 
   const fetchProfessionals = async () => {
     try {
@@ -223,7 +232,8 @@ const App: React.FC = () => {
       name: '',
       duration: 30,
       price: 0,
-      preBooking: false
+      preBooking: false,
+      preBookingRules: ''
     };
     setProfileData({ ...profileData, services: [...profileData.services, newService] });
   };
@@ -240,6 +250,42 @@ const App: React.FC = () => {
       ...profileData,
       services: profileData.services.filter(s => s.id !== id)
     });
+  };
+
+  const handleEditService = (id: string) => {
+    serviceRefs.current[id]?.focus();
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    // Simula salvamento real
+    await new Promise(res => setTimeout(res, 1000));
+    setIsSaving(false);
+    alert("salvo com sucesso");
+  };
+
+  const handleSaveSchedule = async () => {
+    setIsSaving(true);
+    // Simula salvamento real
+    await new Promise(res => setTimeout(res, 1000));
+    setIsSaving(false);
+    alert("salvo com sucesso");
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isProfile: boolean = false) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        if (isProfile) {
+          setProfileData(prev => ({ ...prev, photo: base64 }));
+        } else {
+          setGalleryImages(prev => [base64, ...prev]);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const currentView = () => {
@@ -314,49 +360,116 @@ const App: React.FC = () => {
               <button onClick={() => setDashboardTab('agendamentos')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'agendamentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Agendamentos</button>
               <button onClick={() => setDashboardTab('perfil')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'perfil' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Perfil e Serviços</button>
               <button onClick={() => setDashboardTab('horarios')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'horarios' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Horários</button>
+              <button onClick={() => setDashboardTab('galeria')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'galeria' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Galeria</button>
             </nav>
           </div>
 
           <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm min-h-[400px]">
             {dashboardTab === 'agendamentos' && (
-              <div className="animate-in fade-in slide-in-from-bottom-2">
-                <h2 className="text-2xl font-black text-slate-900 mb-6">Seus Agendamentos</h2>
-                <div className="space-y-4 italic text-slate-400">Nenhum agendamento para hoje.</div>
+              <div className="animate-in fade-in slide-in-from-bottom-2 space-y-10">
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 bg-slate-100 rounded-full border-2 border-slate-200 flex items-center justify-center overflow-hidden">
+                    <img src={profileData.photo} alt="Avatar" className="w-full h-full object-cover" />
+                  </div>
+                  <h2 className="text-4xl font-black text-slate-900">Olá, Marcos Silva!</h2>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="bg-indigo-50 p-6 rounded-[32px] border border-indigo-100 shadow-sm">
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="font-bold text-indigo-900">Ganhos desse mês</h3>
+                      <select className="bg-white border border-indigo-200 rounded-lg text-xs p-1" value={earningsMonth} onChange={e => setEarningsMonth(e.target.value)}>
+                        <option value="06/2024">Junho 2024</option>
+                        <option value="05/2024">Maio 2024</option>
+                      </select>
+                    </div>
+                    <p className="text-3xl font-black text-indigo-600">R$ 1.450,00</p>
+                    <p className="text-[10px] text-indigo-400 mt-1">Soma de todos os serviços realizados no mês.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-2xl font-black text-slate-900">Seus Agendamentos</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="border-b border-slate-100">
+                        <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          <th className="py-4 px-2">Nome cliente</th>
+                          <th className="py-4 px-2">DATA</th>
+                          <th className="py-4 px-2">HORÁRIO</th>
+                          <th className="py-4 px-2">NOME DO SERVIÇO AGENDADO</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-sm text-slate-600">
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center italic text-slate-400">Nenhum agendamento para hoje.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button className="text-indigo-600 font-bold hover:underline">Agendamentos futuros</button>
+                </div>
               </div>
             )}
+            
             {dashboardTab === 'perfil' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 space-y-8">
                 <h2 className="text-2xl font-black text-slate-900">Perfil e Serviços</h2>
                 
                 <div className="space-y-6">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-slate-700">Descrição do Perfil</label>
                         <textarea 
-                          className="w-full p-4 border rounded-2xl min-h-[100px] bg-slate-50"
+                          className="w-full p-4 border rounded-2xl min-h-[140px] bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
                           placeholder="Fale um pouco sobre você..."
                           value={profileData.bio}
                           onChange={(e) => setProfileData({...profileData, bio: e.target.value})}
                         ></textarea>
                       </div>
+
+                      <div className="space-y-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                        <h4 className="text-sm font-bold text-slate-700">Adicionar foto do perfil via upload do dispositivo</h4>
+                        <div className="flex items-center gap-4">
+                          <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                             <img src={profileData.photo} alt="Profile" className="w-full h-full object-cover" />
+                          </div>
+                          <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(e, true)}
+                          />
+                          <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-4 py-2 bg-indigo-50 text-indigo-700 border border-transparent rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors"
+                          >
+                            Escolher arquivo
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-6">
                       <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-700">Número WhatsApp</label>
+                        <label className="text-sm font-bold text-slate-700">Número whatsapp</label>
                         <input 
-                          type="tel" className="w-full p-4 border rounded-2xl bg-slate-50" 
-                          placeholder="(00) 00000-0000"
+                          type="tel" className="w-full p-4 border rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                          placeholder="32988729033"
                           value={profileData.whatsapp}
                           onChange={(e) => setProfileData({...profileData, whatsapp: e.target.value})}
                         />
                       </div>
-                    </div>
-                    
-                    <div className="space-y-4">
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-slate-700">Endereço (Google Maps)</label>
                         <input 
-                          type="text" className="w-full p-4 border rounded-2xl bg-slate-50" 
-                          placeholder="Rua, Número, Cidade..."
+                          type="text" className="w-full p-4 border rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                          placeholder="Rua, Batista de Oliveira, 331, centro"
                           value={profileData.address}
                           onChange={(e) => setProfileData({...profileData, address: e.target.value})}
                         />
@@ -366,68 +479,105 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <span className="text-slate-400 text-xs font-mono">marcai.dev/</span>
                           <input 
-                            type="text" className="flex-1 p-4 border rounded-2xl bg-slate-50" 
+                            type="text" className="flex-1 p-4 border rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
                             placeholder="meulink"
                             value={profileData.customLink}
                             onChange={(e) => setProfileData({...profileData, customLink: e.target.value})}
                           />
                         </div>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-700">Foto do Perfil</label>
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-full bg-slate-100 border-2 border-slate-200 overflow-hidden flex items-center justify-center">
-                            <svg className="w-8 h-8 text-slate-300" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                          </div>
-                          <input type="file" className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
-                        </div>
-                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4 pt-6 border-t border-slate-100">
+                  <div className="space-y-6 pt-8 border-t border-slate-100">
                     <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-bold text-slate-900">Serviços Oferecidos</h3>
-                      <button onClick={handleAddService} className="text-indigo-600 font-bold text-sm hover:underline">+ Adicionar Novo Serviço</button>
+                      <h3 className="text-xl font-black text-slate-900">Serviços Oferecidos</h3>
+                      <button 
+                        onClick={handleAddService}
+                        className="text-indigo-600 font-bold text-sm hover:underline"
+                      >
+                        + Adicionar Novo Serviço
+                      </button>
                     </div>
                     
                     <div className="space-y-4">
-                      {profileData.services.map((s, i) => (
-                        <div key={s.id} className="p-6 bg-slate-50 rounded-[24px] border border-slate-200 grid md:grid-cols-4 gap-4 relative animate-in slide-in-from-left-2">
-                          <button onClick={() => handleDeleteService(s.id)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs shadow-md">✕</button>
-                          <div className="md:col-span-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Serviço</label>
-                            <input type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3 rounded-xl border border-slate-200" placeholder="Ex: Corte" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Valor (R$)</label>
-                            <input type="number" value={s.price} onChange={e => handleUpdateService(s.id, 'price', e.target.value)} className="w-full p-3 rounded-xl border border-slate-200" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Tempo (min)</label>
-                            <input type="number" value={s.duration} onChange={e => handleUpdateService(s.id, 'duration', e.target.value)} className="w-full p-3 rounded-xl border border-slate-200" />
-                          </div>
-                          <div className="flex flex-col justify-end pb-3">
-                            <div className="flex items-center gap-2">
-                              <input type="checkbox" className="w-4 h-4" checked={s.preBooking} onChange={e => handleUpdateService(s.id, 'preBooking', e.target.checked)} />
-                              <span className="text-xs font-medium text-slate-600">Pré-agendamento</span>
+                      {profileData.services.map((s) => (
+                        <div key={s.id} className="p-6 bg-slate-50/50 border border-slate-200 rounded-[28px] grid gap-4 items-start shadow-sm relative animate-in fade-in slide-in-from-top-4">
+                          <div className="grid md:grid-cols-[1fr,120px,120px,180px,80px] gap-4 items-end">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Serviço</label>
+                              <input 
+                                /* Fix: Ensure the ref callback returns void to avoid TypeScript error */
+                                ref={el => { serviceRefs.current[s.id] = el; }}
+                                type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold" placeholder="Ex: Corte" 
+                              />
                             </div>
-                            {s.preBooking && <p className="text-[9px] text-indigo-400 mt-1">* Libera caixa de confirmação extra</p>}
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Valor (R$)</label>
+                              <input type="number" value={s.price} onChange={e => handleUpdateService(s.id, 'price', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold" />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tempo (min)</label>
+                              <input type="number" value={s.duration} onChange={e => handleUpdateService(s.id, 'duration', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold" />
+                            </div>
+                            <div className="flex flex-col gap-2 justify-center h-full pb-1">
+                              <div className="flex items-center gap-2">
+                                <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={s.preBooking} onChange={e => handleUpdateService(s.id, 'preBooking', e.target.checked)} />
+                                <span className="text-xs font-bold text-slate-600">Pré-agendamento</span>
+                              </div>
+                              <p className="text-[9px] text-indigo-400">* Libera caixa de confirmação extra</p>
+                            </div>
+                            <div className="flex items-center gap-2 h-full pb-1">
+                              <button 
+                                onClick={() => handleEditService(s.id)}
+                                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteService(s.id)} 
+                                className="w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center text-xs shadow-md hover:bg-red-600 transition-colors"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </div>
                           </div>
+                          
+                          {s.preBooking && (
+                            <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-slate-200/50 mt-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Regras do Pré-agendamento (enviadas ao cliente)</label>
+                              <textarea 
+                                className="w-full p-3 rounded-xl bg-white border border-slate-200 text-xs mt-1 min-h-[80px]"
+                                placeholder="Descreva as condições para este agendamento (ex: tolerância de atraso, cancelamento)..."
+                                value={s.preBookingRules || ''}
+                                onChange={e => handleUpdateService(s.id, 'preBookingRules', e.target.value)}
+                              ></textarea>
+                            </div>
+                          )}
                         </div>
                       ))}
+                      
                       {profileData.services.length === 0 && (
-                        <div className="p-8 border-2 border-dashed border-slate-200 rounded-3xl text-center text-slate-400 text-sm">Nenhum serviço cadastrado.</div>
+                        <div className="p-12 border-2 border-dashed border-slate-200 rounded-[32px] text-center text-slate-400">
+                          Nenhum serviço cadastrado. Clique em "+ Adicionar Novo Serviço" para começar.
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex justify-end pt-4">
-                    <button className="bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95">Salvar Perfil</button>
+                  <div className="flex justify-end pt-6">
+                    <button 
+                      onClick={handleSaveProfile}
+                      disabled={isSaving}
+                      className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70"
+                    >
+                      {isSaving ? 'Salvando...' : 'Salvar Perfil'}
+                    </button>
                   </div>
                 </div>
               </div>
             )}
+
             {dashboardTab === 'horarios' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 space-y-10">
                 <div className="space-y-6">
@@ -438,31 +588,29 @@ const App: React.FC = () => {
                   
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-slate-700 ml-1">Funcionamento Semanal</h3>
-                    <div className="grid gap-3">
+                    <div className="space-y-2">
                       {daySchedules.map((item, idx) => (
-                        <div key={item.day} className="flex items-center gap-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl group transition-all hover:bg-white hover:border-indigo-100 hover:shadow-sm">
-                          <div className="flex items-center gap-3 w-40">
-                            <input 
-                              type="checkbox" className="w-5 h-5 accent-indigo-600" checked={item.active} 
-                              onChange={e => {
-                                const newSchedules = [...daySchedules];
-                                newSchedules[idx].active = e.target.checked;
-                                setDaySchedules(newSchedules);
-                              }}
-                            />
-                            <span className={`font-bold text-sm ${item.active ? 'text-slate-900' : 'text-slate-400'}`}>{item.day}</span>
-                          </div>
+                        <div key={item.day} className="flex items-center gap-4 p-4 bg-slate-50 border border-slate-100 rounded-2xl transition-all hover:bg-white hover:border-indigo-100">
+                          <input 
+                            type="checkbox" className="w-5 h-5 accent-indigo-600" checked={item.active} 
+                            onChange={e => {
+                              const newSchedules = [...daySchedules];
+                              newSchedules[idx].active = e.target.checked;
+                              setDaySchedules(newSchedules);
+                            }}
+                          />
+                          <span className={`font-bold text-sm w-24 ${item.active ? 'text-slate-900' : 'text-slate-400'}`}>{item.day}</span>
                           
-                          <div className={`flex items-center gap-4 flex-1 transition-opacity ${item.active ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+                          <div className={`flex items-center gap-6 flex-1 transition-opacity ${item.active ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase">Abertura:</span>
-                              <input type="time" className="p-2 bg-white border border-slate-200 rounded-lg text-sm" value={item.open} onChange={e => {
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">ABERTURA:</span>
+                              <input type="time" className="p-2 bg-white border border-slate-200 rounded-lg text-sm font-mono" value={item.open} onChange={e => {
                                 const ns = [...daySchedules]; ns[idx].open = e.target.value; setDaySchedules(ns);
                               }} />
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase">Fechamento:</span>
-                              <input type="time" className="p-2 bg-white border border-slate-200 rounded-lg text-sm" value={item.close} onChange={e => {
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">FECHAMENTO:</span>
+                              <input type="time" className="p-2 bg-white border border-slate-200 rounded-lg text-sm font-mono" value={item.close} onChange={e => {
                                 const ns = [...daySchedules]; ns[idx].close = e.target.value; setDaySchedules(ns);
                               }} />
                             </div>
@@ -481,11 +629,11 @@ const App: React.FC = () => {
                       <div className="flex gap-4 animate-in slide-in-from-top-1">
                         <div>
                           <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Início</label>
-                          <input type="time" value={lunchBreak.start} onChange={e => setLunchBreak({...lunchBreak, start: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 bg-white" />
+                          <input type="time" value={lunchBreak.start} onChange={e => setLunchBreak({...lunchBreak, start: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 bg-white font-mono" />
                         </div>
                         <div>
                           <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fim</label>
-                          <input type="time" value={lunchBreak.end} onChange={e => setLunchBreak({...lunchBreak, end: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 bg-white" />
+                          <input type="time" value={lunchBreak.end} onChange={e => setLunchBreak({...lunchBreak, end: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 bg-white font-mono" />
                         </div>
                       </div>
                     )}
@@ -520,7 +668,7 @@ const App: React.FC = () => {
                             </>
                           )}
                           <div className="flex items-center gap-2 mb-3 px-2">
-                            <input type="checkbox" className="w-4 h-4" checked={h.closed} onChange={e => {
+                            <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={h.closed} onChange={e => {
                               const nh = [...specialHours]; nh[i].closed = e.target.checked; setSpecialHours(nh);
                             }} />
                             <span className="text-xs font-medium text-slate-600">Não haverá funcionamento</span>
@@ -532,11 +680,63 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="pt-6 flex justify-end">
-                    <button className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100/50 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    <button 
+                      onClick={handleSaveSchedule}
+                      disabled={isSaving}
+                      className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100/50 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-70"
+                    >
+                      {isSaving ? (
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      )}
                       Salvar Horários
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {dashboardTab === 'galeria' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 space-y-8">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900 mb-2">Galeria de Fotos</h2>
+                    <p className="text-slate-500 text-sm">Faça upload de fotos dos seus trabalhos para exibir no seu perfil.</p>
+                  </div>
+                  <input 
+                    type="file" 
+                    ref={galleryInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, false)}
+                  />
+                  <button 
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
+                  >
+                    Fazer Upload
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                  {galleryImages.length === 0 ? (
+                    <div className="col-span-full p-20 border-2 border-dashed border-slate-200 rounded-[32px] text-center text-slate-400">
+                      Nenhuma foto enviada ainda. Suas fotos aparecerão aqui.
+                    </div>
+                  ) : (
+                    galleryImages.map((img, i) => (
+                      <div key={i} className="aspect-square rounded-3xl overflow-hidden border border-slate-200 shadow-sm group relative animate-in zoom-in duration-300">
+                        <img src={img} alt={`Trabalho ${i}`} className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => setGalleryImages(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
