@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { getSmartScheduleAdvice } from '../services/geminiService';
+import { getSmartScheduleAdvice } from '../services/geminiService.ts';
 
 const AIAssistant: React.FC<{ context?: any }> = ({ context }) => {
   const [input, setInput] = useState('');

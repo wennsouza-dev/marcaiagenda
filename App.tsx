@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
-import Layout from './components/Layout';
-import DirectoryTree from './components/DirectoryTree';
-import ProfessionalCard from './components/ProfessionalCard';
-import AIAssistant from './components/AIAssistant';
-import { Professional, AppTab } from './types';
+import Layout from './components/Layout.tsx';
+import DirectoryTree from './components/DirectoryTree.tsx';
+import ProfessionalCard from './components/ProfessionalCard.tsx';
+import AIAssistant from './components/AIAssistant.tsx';
+import { Professional, AppTab } from './types.ts';
 
 const MOCK_PROFESSIONALS: Professional[] = [
   {
@@ -168,7 +168,7 @@ const App: React.FC = () => {
                     <h4 className="font-bold text-slate-900 mb-4">Escolha um serviço:</h4>
                     <div className="space-y-3">
                       {selectedProfessional.services.map(s => (
-                        <div key={s.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-indigo-600 hover:bg-indigo-50/30 cursor-pointer transition-all group">
+                        <div key={s.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-indigo-600 hover:bg-indigo-50/30 cursor-pointer transition-all group" onClick={() => setSelectedProfessional(null)}>
                           <div>
                             <p className="font-bold text-slate-900">{s.name}</p>
                             <p className="text-xs text-slate-500">{s.duration} min</p>

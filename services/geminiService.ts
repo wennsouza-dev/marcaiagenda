@@ -1,10 +1,11 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export async function getSmartScheduleAdvice(prompt: string, context: any) {
   try {
+    // Inicializa a IA apenas no momento da chamada para garantir que process.env.API_KEY esteja disponível
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+    
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `
@@ -18,6 +19,6 @@ export async function getSmartScheduleAdvice(prompt: string, context: any) {
     return response.text || "Desculpe, não consegui processar seu agendamento agora.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Ocorreu um erro ao consultar o assistente de IA.";
+    return "Ocorreu um erro ao consultar o assistente de IA. Verifique se a API Key está configurada.";
   }
 }
