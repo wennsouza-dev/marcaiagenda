@@ -21,7 +21,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate, isLog
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">MarcAI <span className="text-indigo-600">Agenda</span></h1>
           </button>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {!isLoggedIn ? (
               <button 
                 onClick={() => onNavigate('pro_login')}
@@ -30,9 +30,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate, isLog
                 Entrar
               </button>
             ) : (
-              <span className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full font-bold border border-emerald-100">
-                Logado
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full font-bold border border-emerald-100">
+                  Logado
+                </span>
+                <button 
+                  onClick={() => onNavigate('landing')}
+                  className="text-slate-400 hover:text-red-500 transition-colors p-2"
+                  title="Sair"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </button>
+              </div>
             )}
           </div>
         </div>

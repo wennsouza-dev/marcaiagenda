@@ -4,6 +4,7 @@ export interface Service {
   name: string;
   duration: number; // em minutos
   price: number;
+  preBooking?: boolean;
 }
 
 export interface Professional {
@@ -18,6 +19,9 @@ export interface Professional {
   rating: number;
   services: Service[];
   expireDays?: number;
+  whatsapp?: string;
+  address?: string;
+  customLink?: string;
 }
 
 export interface Appointment {
