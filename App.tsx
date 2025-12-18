@@ -9,15 +9,7 @@ import { supabase } from './lib/supabase.ts';
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-const DEFAULT_PROFESSIONALS: Professional[] = [
-  {
-    id: '00000000-0000-0000-0000-000000000001', slug: 'marcos-barbeiro', name: 'Marcos Silva', salonName: 'Barbearia do Marcos', category: 'Beleza', city: 'São Paulo',
-    bio: 'Especialista em visagismo e barboterapia.', imageUrl: 'https://picsum.photos/seed/barber/400/300',
-    rating: 4.9, services: [{ id: 's1', name: 'Corte de Cabelo', duration: 30, price: 50, preBooking: false }],
-    gallery: ['https://picsum.photos/seed/1/400/300', 'https://picsum.photos/seed/2/400/300'],
-    whatsapp: '5511999999999'
-  }
-];
+const DEFAULT_PROFESSIONALS: Professional[] = [];
 
 const DeveloperPanel: React.FC<{ 
   professionals: Professional[];
@@ -80,7 +72,7 @@ const DeveloperPanel: React.FC<{
           category: newProf.category,
           city: newProf.city,
           expire_days: newProf.expireDays,
-          reset_word: newProf.reset_word,
+          reset_word: newProf.resetWord,
         }).eq('id', editingId);
         if (error) throw error;
         alert('Profissional atualizado!');
@@ -139,11 +131,7 @@ const DeveloperPanel: React.FC<{
 
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja realmente excluir este profissional?')) return;
-    if (id.length < 10) {
-      alert("Este é um profissional de demonstração e não pode ser excluído.");
-      return;
-    }
-
+    
     try {
       const { error } = await supabase.from('professionals').delete().eq('id', id);
       if (error) throw error;
@@ -196,25 +184,29 @@ const DeveloperPanel: React.FC<{
           <div className="pt-8 border-t border-slate-100">
             <h3 className="text-xl font-bold text-slate-900 mb-4">Profissionais Cadastrados</h3>
             <div className="space-y-3">
-              {professionals.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-200 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover border border-white shadow-sm" />
-                    <div>
-                      <p className="font-bold text-sm text-slate-900">{p.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wider">{p.category} • {p.city}</p>
+              {professionals.length === 0 ? (
+                <p className="text-slate-400 italic text-sm text-center py-4">Nenhum profissional cadastrado.</p>
+              ) : (
+                professionals.map(p => (
+                  <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-200 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover border border-white shadow-sm" />
+                      <div>
+                        <p className="font-bold text-sm text-slate-900">{p.name}</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">{p.category} • {p.city}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEdit(p)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors" title="Editar">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                      <button onClick={() => handleDelete(p.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="Excluir">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleEdit(p)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors" title="Editar">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                    </button>
-                    <button onClick={() => handleDelete(p.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="Excluir">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -253,6 +245,8 @@ const App: React.FC = () => {
   const serviceRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [profileData, setProfileData] = useState({
+    id: '',
+    name: '',
     bio: '',
     whatsapp: '',
     address: '',
@@ -264,8 +258,6 @@ const App: React.FC = () => {
   const [daySchedules, setDaySchedules] = useState(
     DAYS_OF_WEEK.map(day => ({ day, active: true, open: '09:00', close: '18:00' }))
   );
-  const [lunchBreak, setLunchBreak] = useState({ active: false, start: '12:00', end: '13:00' });
-  const [specialHours, setSpecialHours] = useState([{ date: '', open: '', close: '', closed: false }]);
   
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [earningsMonth, setEarningsMonth] = useState('06/2024');
@@ -287,12 +279,16 @@ const App: React.FC = () => {
         setProfessionals(DEFAULT_PROFESSIONALS);
       }
     } catch (err) {
-      console.warn("Aviso: Usando dados mockados.");
       setProfessionals(DEFAULT_PROFESSIONALS);
     }
   };
 
   useEffect(() => { fetchProfessionals(); }, []);
+
+  const activeProfessionalInModal = useMemo(() => {
+    if (!selectedProfessional) return null;
+    return professionals.find(p => p.id === selectedProfessional.id) || selectedProfessional;
+  }, [selectedProfessional, professionals]);
 
   const filteredProfessionals = useMemo(() => {
     return professionals.filter(p => {
@@ -345,8 +341,12 @@ const App: React.FC = () => {
     serviceRefs.current[id]?.focus();
   };
 
-  // PERSISTÊNCIA REAL DO PERFIL
   const handleSaveProfile = async () => {
+    if (!profileData.id) {
+        alert("Erro: ID do profissional não identificado. Tente logar novamente.");
+        return;
+    }
+
     setIsSaving(true);
     try {
       const { error } = await supabase.from('professionals')
@@ -358,12 +358,12 @@ const App: React.FC = () => {
           image_url: profileData.photo,
           gallery: galleryImages
         })
-        .eq('slug', profileData.customLink);
+        .eq('id', profileData.id);
       
       if (error) throw error;
       
       await fetchProfessionals();
-      alert("Perfil salvo com sucesso!");
+      alert("Alterações salvas com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar perfil: " + err.message);
     } finally {
@@ -378,7 +378,6 @@ const App: React.FC = () => {
     alert("Horários salvos com sucesso!");
   };
 
-  // PERSISTÊNCIA AUTOMÁTICA DA GALERIA
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isProfile: boolean = false) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -388,18 +387,7 @@ const App: React.FC = () => {
         if (isProfile) {
           setProfileData(prev => ({ ...prev, photo: base64 }));
         } else {
-          const newGallery = [base64, ...galleryImages];
-          setGalleryImages(newGallery);
-          
-          // Salva automaticamente para que apareça no Marketplace instantaneamente
-          try {
-            await supabase.from('professionals')
-              .update({ gallery: newGallery })
-              .eq('slug', profileData.customLink);
-            await fetchProfessionals();
-          } catch (err) {
-            console.error("Erro ao persistir galeria:", err);
-          }
+          setGalleryImages(prev => [base64, ...prev]);
         }
       };
       reader.readAsDataURL(file);
@@ -412,7 +400,8 @@ const App: React.FC = () => {
       return;
     }
 
-    const message = `Olá ${selectedProfessional?.name}, gostaria de agendar o seguinte serviço pelo MarcAI Agenda:\n\n` +
+    const targetProf = activeProfessionalInModal;
+    const message = `Olá ${targetProf?.name}, gostaria de agendar o seguinte serviço pelo MarcAI Agenda:\n\n` +
                     `📌 Serviço: ${selectedService?.name}\n` +
                     `📅 Data: ${selectedDate} de Junho de 2024\n` +
                     `⏰ Horário: ${selectedTime}\n` +
@@ -420,43 +409,52 @@ const App: React.FC = () => {
                     `📱 WhatsApp: ${clientData.whatsapp}\n\n` +
                     `Aguardo sua confirmação!`;
     
-    const whatsappLink = `https://wa.me/${selectedProfessional?.whatsapp?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
+    const whatsappLink = `https://wa.me/${targetProf?.whatsapp?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
     window.open(whatsappLink, '_blank');
     
-    // Reset modal state
     setSelectedProfessional(null);
     setSelectedService(null);
     setBookingStep('selection');
     setClientData({ name: '', whatsapp: '', terms: false });
   };
 
-  // SINCRONIZAÇÃO DE DADOS AO LOGAR
   const handleProfessionalLogin = async (userData: any) => {
     try {
-      const { data, error } = await supabase.from('professionals')
+      // Busca pelo slug solicitado
+      let { data, error } = await supabase.from('professionals')
         .select('*')
-        .eq('slug', userData.slug) // Ou por outro identificador único de login
-        .single();
+        .eq('slug', userData.slug)
+        .limit(1);
       
-      if (error) throw error;
+      // Se não achar o específico, pega o primeiro da lista (resiliência contra exclusões)
+      if (!data || data.length === 0) {
+        const { data: allProfs } = await supabase.from('professionals').select('*').limit(1);
+        if (allProfs && allProfs.length > 0) {
+            data = allProfs;
+        } else {
+            throw new Error("Nenhum profissional cadastrado no sistema.");
+        }
+      }
+
+      const prof = data[0];
 
       setProfileData({
-        bio: data.bio || '',
-        whatsapp: data.whatsapp || '',
-        address: data.address || '',
-        customLink: data.slug,
-        services: data.services || [],
-        photo: data.image_url || 'https://picsum.photos/seed/marcos/100'
+        id: prof.id,
+        name: prof.name,
+        bio: prof.bio || '',
+        whatsapp: prof.whatsapp || '',
+        address: prof.address || '',
+        customLink: prof.slug,
+        services: prof.services || [],
+        photo: prof.image_url || 'https://picsum.photos/seed/marcos/100'
       });
       
-      setGalleryImages(data.gallery || []);
+      setGalleryImages(prof.gallery || []);
       setIsLoggedIn(true);
       setView(AppView.PROFESSIONAL_DASHBOARD);
     } catch (err: any) {
       console.error("Login Error:", err);
-      // Fallback para demo se necessário
-      setIsLoggedIn(true);
-      setView(AppView.PROFESSIONAL_DASHBOARD);
+      alert("Erro ao acessar painel: " + err.message);
     }
   };
 
@@ -509,9 +507,15 @@ const App: React.FC = () => {
             </select>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProfessionals.map((prof) => (
-              <ProfessionalCard key={prof.id} professional={prof} onSelect={(p) => setSelectedProfessional(p)} />
-            ))}
+            {filteredProfessionals.length === 0 ? (
+              <div className="col-span-full py-20 text-center">
+                <p className="text-slate-400 italic text-lg">Nenhum profissional encontrado.</p>
+              </div>
+            ) : (
+              filteredProfessionals.map((prof) => (
+                <ProfessionalCard key={prof.id} professional={prof} onSelect={(p) => setSelectedProfessional(p)} />
+              ))
+            )}
           </div>
         </div>
       );
@@ -545,7 +549,7 @@ const App: React.FC = () => {
                   <div className="w-20 h-20 bg-slate-100 rounded-full border-2 border-slate-200 flex items-center justify-center overflow-hidden">
                     <img src={profileData.photo} alt="Avatar" className="w-full h-full object-cover" />
                   </div>
-                  <h2 className="text-4xl font-black text-slate-900">Olá, Marcos Silva!</h2>
+                  <h2 className="text-4xl font-black text-slate-900">Olá, {profileData.name || 'Profissional'}!</h2>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">
@@ -557,7 +561,7 @@ const App: React.FC = () => {
                         <option value="05/2024">Maio 2024</option>
                       </select>
                     </div>
-                    <p className="text-3xl font-black text-indigo-600">R$ 1.450,00</p>
+                    <p className="text-3xl font-black text-indigo-600">R$ 0,00</p>
                     <p className="text-[10px] text-indigo-400 mt-1">Soma de todos os serviços realizados no mês.</p>
                   </div>
                 </div>
@@ -787,18 +791,9 @@ const App: React.FC = () => {
                       <div key={i} className="aspect-square rounded-3xl overflow-hidden border border-slate-200 shadow-sm group relative animate-in zoom-in duration-300">
                         <img src={img} alt={`Trabalho ${i}`} className="w-full h-full object-cover" />
                         <button 
-                          onClick={async () => {
+                          onClick={() => {
                             const updated = galleryImages.filter((_, idx) => idx !== i);
                             setGalleryImages(updated);
-                            // Persiste a remoção
-                            try {
-                              await supabase.from('professionals')
-                                .update({ gallery: updated })
-                                .eq('slug', profileData.customLink);
-                              await fetchProfessionals();
-                            } catch (err) {
-                              console.error("Erro ao deletar da galeria:", err);
-                            }
                           }} 
                           className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs shadow-lg"
                         >✕</button>
@@ -822,21 +817,23 @@ const App: React.FC = () => {
     }
   };
 
+  const modalProfessional = activeProfessionalInModal;
+
   return (
     <Layout activeView={view} onNavigate={handleNavigate} isLoggedIn={isLoggedIn}>
       {currentView()}
-      {selectedProfessional && (
+      {modalProfessional && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
             <button onClick={() => { setSelectedProfessional(null); setSelectedService(null); setBookingStep('selection'); }} className="absolute top-6 right-6 z-50 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
             
             <div className="relative h-80 overflow-hidden">
-              <img src={selectedProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
+              <img src={modalProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent"></div>
               <div className="absolute top-10 left-10 p-6 bg-slate-900/60 backdrop-blur-md rounded-3xl border border-white/20 animate-in slide-in-from-top-4 duration-500">
-                <span className="bg-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase mb-2 inline-block text-white shadow-lg">{selectedProfessional.category}</span>
-                <h2 className="text-4xl font-black text-white leading-tight">{selectedProfessional.name}</h2>
-                {selectedProfessional.salonName && <p className="text-white/80 font-medium flex items-center gap-1 mt-1 text-sm">🏪 {selectedProfessional.salonName}</p>}
+                <span className="bg-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase mb-2 inline-block text-white shadow-lg">{modalProfessional.category}</span>
+                <h2 className="text-4xl font-black text-white leading-tight">{modalProfessional.name}</h2>
+                {modalProfessional.salonName && <p className="text-white/80 font-medium flex items-center gap-1 mt-1 text-sm">🏪 {modalProfessional.salonName}</p>}
               </div>
             </div>
 
@@ -893,13 +890,13 @@ const App: React.FC = () => {
                       <div className="space-y-12">
                         <div className="space-y-4">
                           <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
-                          <p className="text-slate-600 leading-relaxed text-lg">{selectedProfessional.bio}</p>
+                          <p className="text-slate-600 leading-relaxed text-lg">{modalProfessional.bio}</p>
                         </div>
 
                         <div className="space-y-6">
                           <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
                           <div className="space-y-4">
-                            {selectedProfessional.services?.map(s => (
+                            {modalProfessional.services?.map(s => (
                               <button 
                                 key={s.id} 
                                 onClick={() => setSelectedService(s)}
@@ -921,12 +918,12 @@ const App: React.FC = () => {
                         <div className="space-y-6">
                           <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            {selectedProfessional.gallery?.map((img, i) => (
+                            {modalProfessional.gallery?.map((img, i) => (
                               <div key={i} className="aspect-square rounded-[24px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-transform">
                                 <img src={img} className="w-full h-full object-cover" />
                               </div>
                             ))}
-                            {(!selectedProfessional.gallery || selectedProfessional.gallery.length === 0) && (
+                            {(!modalProfessional.gallery || modalProfessional.gallery.length === 0) && (
                               <div className="col-span-full p-12 bg-slate-50 rounded-[32px] text-center text-slate-400 italic font-medium">
                                 Nenhuma foto disponível na galeria deste profissional.
                               </div>
@@ -936,7 +933,7 @@ const App: React.FC = () => {
                       </div>
 
                       <div className="lg:sticky lg:top-10 h-fit">
-                        <AIAssistant context={selectedProfessional} />
+                        <AIAssistant context={modalProfessional} />
                       </div>
                     </div>
                   )}
