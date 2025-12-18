@@ -284,48 +284,6 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchAppointments = async (profId: string) => {
-    try {
-      // Em um cenário real, buscaria do Supabase. 
-      // Para o MVP visual, forneceremos dados mockados se a tabela estiver vazia.
-      const { data, error } = await supabase.from('appointments').select('*').eq('professionalId', profId);
-      if (error) throw error;
-      
-      if (data && data.length > 0) {
-        setAppointments(data);
-      } else {
-        // Dados mockados baseados na foto solicitada
-        setAppointments([
-          {
-            id: '1',
-            professionalId: profId,
-            clientName: 'Ana Silva',
-            clientPhone: '11999999999',
-            serviceId: 's1',
-            serviceName: 'Corte de Cabelo',
-            date: '17/12',
-            time: '14:00',
-            status: 'confirmed'
-          },
-          {
-            id: '2',
-            professionalId: profId,
-            clientName: 'Carlos Souza',
-            clientPhone: '11988888888',
-            serviceId: 's2',
-            serviceName: 'Barba',
-            date: '17/12',
-            time: '15:30',
-            status: 'pending',
-            isPreBooking: true
-          }
-        ]);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   useEffect(() => { fetchProfessionals(); }, []);
 
   const activeProfessionalInModal = useMemo(() => {
@@ -491,22 +449,39 @@ const App: React.FC = () => {
       });
       
       setGalleryImages(prof.gallery || []);
-      fetchAppointments(prof.id);
+      
+      // Carregar agendamentos mockados para demonstração
+      setAppointments([
+        {
+          id: '1',
+          professionalId: prof.id,
+          clientName: 'Ana Silva',
+          clientPhone: '11999999999',
+          serviceId: 's1',
+          serviceName: 'Corte de Cabelo',
+          date: '17/12',
+          time: '14:00',
+          status: 'confirmed'
+        },
+        {
+          id: '2',
+          professionalId: prof.id,
+          clientName: 'Carlos Souza',
+          clientPhone: '11988888888',
+          serviceId: 's2',
+          serviceName: 'Barba',
+          date: '17/12',
+          time: '15:30',
+          status: 'pending',
+          isPreBooking: true
+        }
+      ]);
+
       setIsLoggedIn(true);
       setView(AppView.PROFESSIONAL_DASHBOARD);
     } catch (err: any) {
       console.error("Login Error:", err);
       alert("Erro ao acessar painel: " + err.message);
-    }
-  };
-
-  const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-  };
-
-  const deleteAppointment = (id: string) => {
-    if (confirm("Deseja realmente excluir este agendamento?")) {
-        setAppointments(prev => prev.filter(a => a.id !== id));
     }
   };
 
@@ -533,7 +508,7 @@ const App: React.FC = () => {
               </button>
               <button onClick={() => setView(AppView.PROFESSIONAL_LOGIN)} className="p-10 bg-white border-2 border-slate-100 rounded-[32px] hover:border-indigo-600 hover:-translate-y-2 transition-all">
                 <div className="w-16 h-16 mx-auto mb-4 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900">Área do Profissional</h3>
                 <p className="text-slate-500 text-sm mt-2">gerencie sua agenda e serviços</p>
@@ -587,150 +562,128 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto py-12 px-4 animate-in fade-in duration-500">
           <div className="flex justify-center mb-8">
             <nav className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              <button onClick={() => setDashboardTab('agendamentos')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'agendamentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Início</button>
-              <button onClick={() => setDashboardTab('perfil')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'perfil' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Perfil e Serviços</button>
-              <button onClick={() => setDashboardTab('horarios')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'horarios' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Horários</button>
+              <button onClick={() => setDashboardTab('agendamentos')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'agendamentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>AGENDAMENTOS</button>
+              <button onClick={() => setDashboardTab('perfil')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'perfil' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>PERFIL & SERVIÇOS</button>
+              <button onClick={() => setDashboardTab('horarios')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'horarios' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>HORÁRIOS</button>
+              <button onClick={() => setDashboardTab('galeria')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${dashboardTab === 'galeria' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>GALERIA</button>
             </nav>
           </div>
 
           <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm min-h-[400px]">
             {dashboardTab === 'agendamentos' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 space-y-12">
-                {/* Ganhos Card */}
-                <div className="bg-[#0f172a] p-8 rounded-[32px] relative overflow-hidden text-white shadow-2xl">
-                    <div className="relative z-10 space-y-2">
-                        <h4 className="text-slate-400 text-sm font-medium">Ganhos do dia (Concluídos)</h4>
-                        <p className="text-5xl font-black">R$ 0.00</p>
-                        <button className="mt-4 bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-700 transition-colors">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                {/* Ganhos do Dia */}
+                <div className="bg-[#0f172a] p-8 rounded-[32px] text-white relative overflow-hidden shadow-2xl">
+                    <div className="relative z-10">
+                        <p className="text-slate-400 text-sm font-medium mb-1">Ganhos do dia (Concluídos)</p>
+                        <h3 className="text-5xl font-black mb-6 tracking-tight">R$ 0.00</h3>
+                        <button className="bg-slate-800 text-slate-300 px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-slate-700 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                             Ganhos por Período
                         </button>
                     </div>
-                    {/* Background PIX icon simulation */}
-                    <div className="absolute right-[-20px] bottom-[-20px] text-white/5 pointer-events-none">
+                    {/* Background SVG Simulation */}
+                    <div className="absolute right-[-20px] bottom-[-20px] opacity-10">
                         <svg className="w-64 h-64" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
                     </div>
                 </div>
 
                 <div className="space-y-6">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
-                        <h3 className="text-2xl font-black text-slate-900">Agendamentos de Hoje</h3>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Agendamentos de Hoje</h2>
                     </div>
-
-                    <div className="grid gap-6">
-                        {appointments.length === 0 ? (
-                            <div className="p-12 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl">
-                                <p className="text-slate-400 italic">Nenhum agendamento para hoje.</p>
-                            </div>
-                        ) : (
-                            appointments.map(app => (
-                                <div key={app.id} className={`p-8 bg-white border ${app.status === 'pending' ? 'border-amber-200' : 'border-slate-100'} rounded-[32px] shadow-sm relative space-y-6 transition-all hover:shadow-md`}>
-                                    {/* Header do Card */}
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <h4 className="text-2xl font-black text-slate-900">{app.clientName}</h4>
-                                            <a href={`https://wa.me/${app.clientPhone}`} className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1 mt-1">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                                                {app.clientPhone}
-                                            </a>
-                                        </div>
-                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                                            app.status === 'confirmed' ? 'bg-indigo-50 text-indigo-600' : 
-                                            app.status === 'pending' ? 'bg-amber-50 text-amber-600' :
-                                            'bg-slate-100 text-slate-500'
-                                        }`}>
-                                            {app.status === 'confirmed' ? 'Confirmado' : app.status === 'pending' ? 'Pendente' : 'Cancelado'}
-                                        </span>
-                                    </div>
-
-                                    {/* Info Row */}
-                                    <div className="bg-slate-50/80 p-4 rounded-2xl flex flex-wrap items-center gap-6 text-slate-500 text-sm font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-5 h-5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                            {app.date} <span className="opacity-40 font-normal">(Hoje)</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-5 h-5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            {app.time}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-5 h-5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                                            {app.serviceName}
+                    
+                    <div className="grid gap-8">
+                        {appointments.map(app => (
+                            <div key={app.id} className={`p-8 bg-white border ${app.status === 'pending' ? 'border-amber-200 shadow-amber-50 shadow-lg' : 'border-slate-100 shadow-sm'} rounded-[32px] space-y-6 relative group transition-all hover:shadow-md`}>
+                                {/* Header Card */}
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h4 className="text-2xl font-black text-slate-900 leading-none mb-2">{app.clientName}</h4>
+                                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm">
+                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                                            {app.clientPhone}
                                         </div>
                                     </div>
+                                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                        app.status === 'confirmed' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
+                                    }`}>
+                                        {app.status === 'confirmed' ? 'CONFIRMADO' : 'PENDENTE'}
+                                    </span>
+                                </div>
 
-                                    {/* Pre-agendamento Alert */}
-                                    {app.isPreBooking && app.status === 'pending' && (
-                                        <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl flex gap-4 animate-pulse">
-                                            <div className="flex-shrink-0">
-                                                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <h5 className="text-[10px] font-black text-amber-800 uppercase tracking-widest flex items-center gap-2">
-                                                    🔔 Pré-Agendamento Ativo
-                                                </h5>
-                                                <p className="text-amber-700 text-xs font-medium italic">
-                                                    "Para confirmar este serviço, é necessário o pagamento antecipado de 50% via PIX (Chave: 123.456.789-00)."
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Ações */}
-                                    <div className="grid gap-3 pt-4">
-                                        {app.status === 'pending' && (
-                                            <>
-                                                <button 
-                                                    onClick={() => updateAppointmentStatus(app.id, 'confirmed')}
-                                                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98]"
-                                                >
-                                                    Pré-confirmar
-                                                </button>
-                                                <button 
-                                                    className="w-full py-4 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-2xl font-bold text-sm hover:bg-indigo-100 transition-all active:scale-[0.98]"
-                                                >
-                                                    Confirmar Agendamento
-                                                </button>
-                                            </>
-                                        )}
-                                        
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <button 
-                                                onClick={() => updateAppointmentStatus(app.id, 'concluded')}
-                                                className="w-full py-3.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl font-bold text-sm hover:bg-emerald-100 transition-all active:scale-[0.98]"
-                                            >
-                                                Concluir
-                                            </button>
-                                            <button 
-                                                onClick={() => updateAppointmentStatus(app.id, 'cancelled')}
-                                                className="w-full py-3.5 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-bold text-sm hover:bg-red-100 transition-all active:scale-[0.98]"
-                                            >
-                                                Cancelar
-                                            </button>
-                                        </div>
-
-                                        <button 
-                                            onClick={() => deleteAppointment(app.id)}
-                                            className="w-fit mx-auto flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors mt-2"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            Excluir Agendamento
-                                        </button>
+                                {/* Info Bar */}
+                                <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-6 text-slate-500 text-sm font-medium">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                        {app.date} <span className="opacity-40 font-normal ml-1">(Hoje)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        {app.time}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                                        {app.serviceName}
                                     </div>
                                 </div>
-                            ))
-                        )}
+
+                                {/* Banner Pré-agendamento */}
+                                {app.isPreBooking && (
+                                    <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl flex gap-4">
+                                        <div className="flex-shrink-0 text-amber-600">
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <h5 className="text-[10px] font-black text-amber-800 uppercase tracking-widest flex items-center gap-2">
+                                                <span>🔔</span> <span>⚠️ PRÉ-AGENDAMENTO ATIVO</span>
+                                            </h5>
+                                            <p className="text-amber-700 text-xs font-medium italic">
+                                                "Para confirmar este serviço, é necessário o pagamento antecipado de 50% via PIX (Chave: 123.456.789-00)."
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Ações do Card */}
+                                <div className="space-y-3">
+                                    {app.isPreBooking && app.status === 'pending' && (
+                                        <>
+                                            <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98]">
+                                                Pré-confirmar
+                                            </button>
+                                            <button className="w-full py-4 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-2xl font-bold text-sm hover:bg-indigo-100 transition-all">
+                                                Confirmar Agendamento
+                                            </button>
+                                        </>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button className="py-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl font-bold text-sm hover:bg-emerald-100 transition-all">
+                                            Concluir
+                                        </button>
+                                        <button className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-bold text-sm hover:bg-red-100 transition-all">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                    <button className="w-full flex items-center justify-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors pt-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                        Excluir Agendamento
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                <div className="space-y-6 pt-4">
-                    <div className="flex items-center gap-2">
+                {/* Próximos Agendamentos */}
+                <div className="space-y-6 pt-10">
+                    <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-slate-300 rounded-full"></div>
-                        <h3 className="text-2xl font-black text-slate-900">Próximos Agendamentos</h3>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Próximos Agendamentos</h2>
                     </div>
-                    <div className="p-12 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl">
-                        <p className="text-slate-400 italic">Nenhum agendamento futuro.</p>
+                    <div className="p-16 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-[32px]">
+                        <p className="text-slate-400 italic">Nenhum agendamento futuro no sistema.</p>
                     </div>
                 </div>
               </div>
@@ -910,6 +863,49 @@ const App: React.FC = () => {
                       {isSaving ? 'Salvando...' : 'Salvar Horários'}
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {dashboardTab === 'galeria' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 space-y-8">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900 mb-2">Galeria de Fotos</h2>
+                    <p className="text-slate-500 text-sm">Fotos dos seus trabalhos que aparecerão no seu perfil público.</p>
+                  </div>
+                  <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, false)} />
+                  <button onClick={() => galleryInputRef.current?.click()} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    Fazer Upload
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                  {galleryImages.length === 0 ? (
+                    <div className="col-span-full p-20 border-2 border-dashed border-slate-200 rounded-[32px] text-center text-slate-400">
+                      Nenhuma foto enviada ainda. Use o botão acima para adicionar fotos.
+                    </div>
+                  ) : (
+                    galleryImages.map((img, i) => (
+                      <div key={i} className="aspect-square rounded-3xl overflow-hidden border border-slate-200 shadow-sm group relative animate-in zoom-in duration-300">
+                        <img src={img} alt={`Trabalho ${i}`} className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => {
+                            const updated = galleryImages.filter((_, idx) => idx !== i);
+                            setGalleryImages(updated);
+                          }} 
+                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs shadow-lg"
+                        >✕</button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-6">
+                  <button onClick={handleSaveProfile} disabled={isSaving} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70">
+                    {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
                 </div>
               </div>
             )}

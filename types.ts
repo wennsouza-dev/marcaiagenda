@@ -31,9 +31,9 @@ export interface Appointment {
   id: string;
   professionalId: string;
   clientName: string;
-  clientPhone: string;
+  clientPhone?: string;
   serviceId: string;
-  serviceName: string;
+  serviceName?: string;
   date: string;
   time: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'concluded';
