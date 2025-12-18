@@ -250,7 +250,7 @@ const App: React.FC = () => {
     bio: '',
     whatsapp: '',
     address: '',
-    customLink: 'meulink',
+    customLink: '',
     services: [] as Service[],
     photo: 'https://picsum.photos/seed/marcos/100'
   });
@@ -328,21 +328,21 @@ const App: React.FC = () => {
       preBooking: false,
       preBookingRules: ''
     };
-    setProfileData({ ...profileData, services: [...profileData.services, newService] });
+    setProfileData(prev => ({ ...prev, services: [...prev.services, newService] }));
   };
 
   const handleUpdateService = (id: string, field: keyof Service, value: any) => {
-    setProfileData({
-      ...profileData,
-      services: profileData.services.map(s => s.id === id ? { ...s, [field]: value } : s)
-    });
+    setProfileData(prev => ({
+      ...prev,
+      services: prev.services.map(s => s.id === id ? { ...s, [field]: value } : s)
+    }));
   };
 
   const handleDeleteService = (id: string) => {
-    setProfileData({
-      ...profileData,
-      services: profileData.services.filter(s => s.id !== id)
-    });
+    setProfileData(prev => ({
+      ...prev,
+      services: prev.services.filter(s => s.id !== id)
+    }));
   };
 
   const handleEditService = (id: string) => {
@@ -351,7 +351,7 @@ const App: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!profileData.id) {
-        alert("Erro crítico: Perfil não autenticado corretamente. Saia e entre novamente.");
+        alert("Erro ao salvar: Sessão de profissional não identificada.");
         return;
     }
 
@@ -370,11 +370,11 @@ const App: React.FC = () => {
       
       if (error) throw error;
       
-      // Sincronização obrigatória com o Marketplace
+      // Sincronização definitiva com o marketplace
       await fetchProfessionals();
-      alert("Sucesso! Seus dados de perfil, WhatsApp, Endereço e Serviços foram salvos e já estão visíveis para os clientes.");
+      alert("Sucesso absoluto! Seus dados foram salvos e o perfil público atualizado.");
     } catch (err: any) {
-      alert("Falha ao salvar: " + err.message);
+      alert("Falha ao persistir dados: " + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -382,9 +382,9 @@ const App: React.FC = () => {
 
   const handleSaveSchedule = async () => {
     setIsSaving(true);
-    await new Promise(res => setTimeout(res, 1000));
+    await new Promise(res => setTimeout(res, 800));
     setIsSaving(false);
-    alert("Grade de horários atualizada!");
+    alert("Grade de horários atualizada com sucesso.");
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isProfile: boolean = false) => {
@@ -405,7 +405,7 @@ const App: React.FC = () => {
 
   const handleFinishBooking = () => {
     if (!clientData.name || !clientData.whatsapp || !clientData.terms) {
-      alert("Preencha seu nome, whatsapp e aceite os termos.");
+      alert("Preencha todos os campos e aceite os termos.");
       return;
     }
 
@@ -414,7 +414,7 @@ const App: React.FC = () => {
                     `📌 ${selectedService?.name}\n` +
                     `📅 ${selectedDate}/06 às ${selectedTime}\n` +
                     `👤 Cliente: ${clientData.name}\n` +
-                    `📱 Contato: ${clientData.whatsapp}`;
+                    `📱 WhatsApp: ${clientData.whatsapp}`;
     
     const whatsappLink = `https://wa.me/${targetProf?.whatsapp?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
     window.open(whatsappLink, '_blank');
@@ -435,7 +435,7 @@ const App: React.FC = () => {
         data = allProfs;
       }
 
-      if (!data || data.length === 0) throw new Error("Nenhum profissional encontrado.");
+      if (!data || data.length === 0) throw new Error("Nenhum profissional localizado.");
 
       const prof = data[0];
       setProfileData({
@@ -458,7 +458,7 @@ const App: React.FC = () => {
       setIsLoggedIn(true);
       setView(AppView.PROFESSIONAL_DASHBOARD);
     } catch (err: any) {
-      alert("Erro no login: " + err.message);
+      alert("Falha no login: " + err.message);
     }
   };
 
@@ -474,7 +474,7 @@ const App: React.FC = () => {
                 Agendamentos que <span className="text-indigo-600">aprendem</span> com você.
               </h2>
               <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium">
-                A plataforma inteligente que conecta clientes a profissionais de forma simples e rápida.
+                A plataforma inteligente que conecta clientes a profissionais de forma simples e direta.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto w-full">
@@ -482,15 +482,15 @@ const App: React.FC = () => {
                 <div className="w-16 h-16 mx-auto mb-4 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">Sou cliente</h3>
-                <p className="text-slate-500 text-sm mt-2">agendar um serviço</p>
+                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Sou cliente</h3>
+                <p className="text-slate-500 text-sm mt-2">agendar um novo serviço</p>
               </button>
               <button onClick={() => setView(AppView.PROFESSIONAL_LOGIN)} className="p-10 bg-white border-2 border-slate-100 rounded-[32px] hover:border-indigo-600 hover:-translate-y-2 transition-all">
                 <div className="w-16 h-16 mx-auto mb-4 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">Área do Profissional</h3>
-                <p className="text-slate-500 text-sm mt-2">gerenciar minha agenda</p>
+                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Área do Profissional</h3>
+                <p className="text-slate-500 text-sm mt-2">gerenciar minha grade</p>
               </button>
             </div>
           </div>
@@ -523,8 +523,8 @@ const App: React.FC = () => {
 
       {view === AppView.PROFESSIONAL_LOGIN && (
         <div className="min-h-[70vh] flex items-center justify-center px-4">
-          <div className="bg-white p-10 rounded-[32px] shadow-2xl border border-slate-100 w-full max-w-md space-y-8">
-            <h2 className="text-3xl font-bold text-center">Login Profissional</h2>
+          <div className="bg-white p-10 rounded-[40px] shadow-2xl border border-slate-100 w-full max-w-md space-y-8">
+            <h2 className="text-3xl font-bold text-center tracking-tight">Login Profissional</h2>
             <div className="space-y-4">
               <input placeholder="Usuário" className="w-full px-4 py-4 border rounded-2xl bg-slate-50 outline-none" />
               <input type="password" placeholder="Senha" className="w-full px-4 py-4 border rounded-2xl bg-slate-50 outline-none" />
@@ -547,7 +547,7 @@ const App: React.FC = () => {
 
           <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm min-h-[500px] relative">
             {dashboardTab === 'agendamentos' && (
-              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2">
+              <div className="space-y-10 animate-in fade-in">
                 <div className="bg-[#0f172a] p-10 rounded-[40px] text-white relative overflow-hidden shadow-2xl">
                     <div className="relative z-10">
                         <p className="text-slate-400 text-sm font-medium mb-1">Ganhos do dia (Concluídos)</p>
@@ -564,7 +564,7 @@ const App: React.FC = () => {
                             <div key={app.id} className={`p-8 bg-white border ${app.status === 'pending' ? 'border-amber-200' : 'border-slate-100'} rounded-[32px] space-y-6 relative shadow-sm`}>
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <h4 className="text-2xl font-black text-slate-900 mb-1">{app.clientName}</h4>
+                                        <h4 className="text-2xl font-black text-slate-900 mb-1 leading-none">{app.clientName}</h4>
                                         <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm tracking-tight">{app.clientPhone}</div>
                                     </div>
                                     <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase ${app.status === 'confirmed' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
@@ -576,23 +576,9 @@ const App: React.FC = () => {
                                     <span>⏰ {app.time}</span>
                                     <span>✂️ {app.serviceName}</span>
                                 </div>
-                                {app.isPreBooking && (
-                                    <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl flex gap-4">
-                                        <div className="text-amber-600 font-black text-lg">🔔</div>
-                                        <div className="space-y-1">
-                                            <h5 className="text-[10px] font-black text-amber-800 tracking-widest uppercase">⚠️ PRÉ-AGENDAMENTO ATIVO</h5>
-                                            <p className="text-amber-700 text-xs italic font-medium">"Pagamento antecipado de 50% via PIX (Chave: 123.456.789-00)."</p>
-                                        </div>
-                                    </div>
-                                )}
-                                <div className="space-y-3">
-                                    {app.isPreBooking && app.status === 'pending' && (
-                                        <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100">Pré-confirmar</button>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button className="py-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl font-bold">Concluir</button>
-                                        <button className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-bold">Cancelar</button>
-                                    </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button className="py-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl font-bold">Concluir</button>
+                                    <button className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-bold">Cancelar</button>
                                 </div>
                             </div>
                         ))}
@@ -602,13 +588,13 @@ const App: React.FC = () => {
             )}
             
             {dashboardTab === 'perfil' && (
-              <div className="animate-in fade-in slide-in-from-bottom-2 space-y-8 pb-24">
+              <div className="animate-in fade-in space-y-8 pb-24">
                 <h2 className="text-2xl font-black text-slate-900 tracking-tight">Perfil e Serviços</h2>
                 <div className="grid md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-slate-700">Descrição do Perfil</label>
-                      <textarea className="w-full p-4 border border-slate-200 rounded-2xl min-h-[140px] bg-slate-50 outline-none" placeholder="Fale sobre seu trabalho..." value={profileData.bio} onChange={(e) => setProfileData({...profileData, bio: e.target.value})}></textarea>
+                      <textarea className="w-full p-4 border border-slate-200 rounded-2xl min-h-[140px] bg-slate-50 outline-none" placeholder="Conte sobre sua experiência..." value={profileData.bio} onChange={(e) => setProfileData({...profileData, bio: e.target.value})}></textarea>
                     </div>
                     <div className="space-y-4 p-6 bg-slate-50 rounded-3xl border border-slate-200">
                       <h4 className="text-sm font-bold text-slate-700">Adicionar foto do perfil via upload</h4>
@@ -626,7 +612,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-slate-700">Endereço (Google Maps)</label>
-                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="Rua Batista de Oliveira, 331" value={profileData.address} onChange={(e) => setProfileData({...profileData, address: e.target.value})} />
+                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="Ex: Rua Batista de Oliveira, 331" value={profileData.address} onChange={(e) => setProfileData({...profileData, address: e.target.value})} />
                     </div>
                   </div>
                 </div>
@@ -641,7 +627,7 @@ const App: React.FC = () => {
                       <div key={s.id} className="p-6 bg-slate-50 border border-slate-200 rounded-[28px] grid md:grid-cols-[1fr,100px,100px,180px,50px] gap-4 items-end animate-in fade-in">
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">SERVIÇO</span>
-                          <input type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" placeholder="Nome do serviço" />
+                          <input type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
                         </div>
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">VALOR (R$)</span>
@@ -662,15 +648,15 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="absolute bottom-6 right-8">
-                  <button onClick={handleSaveProfile} disabled={isSaving} className="bg-[#4338ca] text-white px-14 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-800 transition-all">
+                  <button onClick={handleSaveProfile} disabled={isSaving} className="bg-[#4338ca] text-white px-14 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-800 transition-all active:scale-95">
                     {isSaving ? 'SALVANDO...' : 'Salvar Perfil'}
                   </button>
                 </div>
               </div>
             )}
             
-            {dashboardTab === 'horarios' && <div className="p-20 text-center text-slate-400 italic font-medium">Configure seus horários semanais.</div>}
-            {dashboardTab === 'galeria' && <div className="p-20 text-center text-slate-400 italic font-medium">Suba fotos do seu portfólio.</div>}
+            {dashboardTab === 'horarios' && <div className="p-20 text-center text-slate-400 italic font-medium">Configurações de horários de atendimento.</div>}
+            {dashboardTab === 'galeria' && <div className="p-20 text-center text-slate-400 italic font-medium">Fotos do seu portfólio.</div>}
           </div>
         </div>
       )}
@@ -680,14 +666,18 @@ const App: React.FC = () => {
       {modalProfessional && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
-            <button onClick={() => { setSelectedProfessional(null); setBookingStep('selection'); }} className="absolute top-6 right-6 z-50 bg-slate-900/40 hover:bg-slate-900/60 w-10 h-10 rounded-full text-white flex items-center justify-center">✕</button>
+            <button onClick={() => { setSelectedProfessional(null); setBookingStep('selection'); }} className="absolute top-6 right-6 z-50 bg-slate-900/40 hover:bg-slate-900/60 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
             <div className="relative h-80">
               <img src={modalProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-transparent to-transparent"></div>
               <div className="absolute top-10 left-10 p-6 bg-slate-900/50 backdrop-blur-sm rounded-3xl border border-white/10">
-                <span className="bg-[#4338ca] text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full text-white mb-2 inline-block shadow-lg">BARBEARIA</span>
+                <span className="bg-[#4338ca] text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full text-white mb-2 inline-block shadow-lg">
+                  {modalProfessional.category.toUpperCase()}
+                </span>
                 <h2 className="text-5xl font-black text-white leading-none tracking-tight">{modalProfessional.name}</h2>
-                <div className="flex items-center gap-2 mt-2 text-white/80 text-xs font-bold">🏪 BARBEARIA VIP</div>
+                <div className="flex items-center gap-2 mt-2 text-white/80 text-xs font-bold uppercase tracking-tight">
+                  🏪 {modalProfessional.salonName || 'Barbearia VIP'}
+                </div>
               </div>
             </div>
 
@@ -698,19 +688,32 @@ const App: React.FC = () => {
                     <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Sobre</h4>
                     <div className="space-y-4">
                       <p className="text-slate-600 leading-relaxed text-lg">{modalProfessional.bio}</p>
-                      <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-100">
+                      <div className="grid sm:grid-cols-2 gap-4 pt-6 border-t border-slate-100">
                          {modalProfessional.whatsapp && (
-                           <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
-                             <span className="text-indigo-600 font-black">📱</span>
-                             <span className="text-slate-400 font-black text-[9px] uppercase tracking-widest mr-1">WhatsApp</span>
-                             <a href={`https://wa.me/${modalProfessional.whatsapp.replace(/\D/g, '')}`} target="_blank" className="text-indigo-600 font-black hover:underline">{modalProfessional.whatsapp}</a>
+                           <div className="flex flex-col bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">WhatsApp de Contato</span>
+                             <div className="flex items-center gap-2">
+                               <span className="text-indigo-600 font-black">📱</span>
+                               <a href={`https://wa.me/${modalProfessional.whatsapp.replace(/\D/g, '')}`} target="_blank" className="text-indigo-600 font-black text-lg hover:underline transition-all">
+                                 {modalProfessional.whatsapp}
+                               </a>
+                             </div>
                            </div>
                          )}
                          {modalProfessional.address && (
-                           <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
-                             <span className="text-indigo-600 font-black">📍</span>
-                             <span className="text-slate-400 font-black text-[9px] uppercase tracking-widest mr-1">Endereço</span>
-                             <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(modalProfessional.address)}`} target="_blank" className="text-indigo-600 font-black hover:underline truncate max-w-[200px]">{modalProfessional.address}</a>
+                           <div className="flex flex-col bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Localização</span>
+                             <div className="flex items-center gap-2">
+                               <span className="text-indigo-600 font-black">📍</span>
+                               <a 
+                                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(modalProfessional.address)}`} 
+                                 target="_blank" 
+                                 className="text-indigo-600 font-black text-sm hover:underline line-clamp-2 transition-all"
+                                 title={modalProfessional.address}
+                               >
+                                 {modalProfessional.address}
+                               </a>
+                             </div>
                            </div>
                          )}
                       </div>
@@ -724,9 +727,12 @@ const App: React.FC = () => {
                         <button key={s.id} onClick={() => { setSelectedService(s); setBookingStep('selection'); setSelectedTime('09:00'); }} className="w-full p-7 bg-slate-50 border border-slate-200 rounded-[32px] flex items-center justify-between hover:bg-white hover:border-indigo-200 hover:shadow-xl transition-all group">
                           <div className="flex flex-col">
                             <span className="font-black text-slate-900 text-xl group-hover:text-indigo-600 transition-colors">{s.name}</span>
-                            <span className="text-slate-400 text-xs font-bold mt-1">🕒 {s.duration} min</span>
+                            <div className="flex items-center gap-3 mt-1">
+                               <span className="text-slate-400 text-xs font-bold">🕒 {s.duration} min</span>
+                               {s.preBooking && <span className="bg-amber-100 text-amber-700 text-[8px] font-black px-2 py-0.5 rounded-full tracking-widest uppercase">Pré-pagamento</span>}
+                            </div>
                           </div>
-                          <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
+                          <span className="font-black text-2xl text-indigo-600 tracking-tight">R$ {s.price}</span>
                         </button>
                       ))}
                     </div>
@@ -736,7 +742,9 @@ const App: React.FC = () => {
                     <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Galeria de fotos</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       {modalProfessional.gallery?.map((img, i) => (
-                        <div key={i} className="aspect-square rounded-[32px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-all"><img src={img} className="w-full h-full object-cover" /></div>
+                        <div key={i} className="aspect-square rounded-[32px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-all">
+                          <img src={img} className="w-full h-full object-cover" />
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -750,24 +758,24 @@ const App: React.FC = () => {
                 <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
                   <div className="bg-white p-10 rounded-[40px] w-full max-w-md shadow-2xl space-y-8 animate-in zoom-in-95">
                     <div className="flex justify-between items-start">
-                      <h3 className="text-3xl font-black tracking-tight leading-none">Agendar {selectedService.name}</h3>
-                      <button onClick={() => setSelectedService(null)} className="text-slate-400 font-bold">✕</button>
+                      <h3 className="text-3xl font-black tracking-tight leading-tight">Agendar {selectedService.name}</h3>
+                      <button onClick={() => setSelectedService(null)} className="text-slate-400 font-bold text-xl">✕</button>
                     </div>
                     <div className="space-y-6">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Seu Nome</label>
-                        <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" value={clientData.name} onChange={e => setClientData({...clientData, name: e.target.value})} />
+                        <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={clientData.name} onChange={e => setClientData({...clientData, name: e.target.value})} />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">WhatsApp</label>
-                        <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="32988887777" value={clientData.whatsapp} onChange={e => setClientData({...clientData, whatsapp: e.target.value})} />
+                        <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex: 32988887777" value={clientData.whatsapp} onChange={e => setClientData({...clientData, whatsapp: e.target.value})} />
                       </div>
                       <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <input type="checkbox" className="w-6 h-6 accent-indigo-600" checked={clientData.terms} onChange={e => setClientData({...clientData, terms: e.target.checked})} />
-                        <span className="text-[11px] font-bold text-slate-600">Concordo com os termos e regras de agendamento.</span>
+                        <input type="checkbox" className="w-6 h-6 accent-indigo-600 rounded cursor-pointer" checked={clientData.terms} onChange={e => setClientData({...clientData, terms: e.target.checked})} />
+                        <span className="text-[11px] font-bold text-slate-600 leading-tight">Estou ciente das políticas de cancelamento e comparecimento.</span>
                       </div>
                     </div>
-                    <button onClick={handleFinishBooking} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all">CONCLUIR AGENDAMENTO</button>
+                    <button onClick={handleFinishBooking} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95">CONCLUIR AGENDAMENTO</button>
                   </div>
                 </div>
               )}
