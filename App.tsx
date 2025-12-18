@@ -80,7 +80,7 @@ const DeveloperPanel: React.FC<{
           category: newProf.category,
           city: newProf.city,
           expire_days: newProf.expireDays,
-          reset_word: newProf.resetWord,
+          reset_word: newProf.reset_word,
         }).eq('id', editingId);
         if (error) throw error;
         alert('Profissional atualizado!');
@@ -805,6 +805,12 @@ const App: React.FC = () => {
                       </div>
                     ))
                   )}
+                </div>
+
+                <div className="flex justify-end pt-6">
+                  <button onClick={handleSaveProfile} disabled={isSaving} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70">
+                    {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
                 </div>
               </div>
             )}
