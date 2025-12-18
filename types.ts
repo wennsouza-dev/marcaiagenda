@@ -43,6 +43,7 @@ export interface Appointment {
 export enum AppView {
   LANDING = 'landing',
   CLIENTS = 'clients',
+  PROFESSIONAL_PROFILE = 'pro_profile',
   PROFESSIONAL_LOGIN = 'pro_login',
   PROFESSIONAL_DASHBOARD = 'pro_dashboard',
   DEVELOPER_PANEL = 'dev_panel'

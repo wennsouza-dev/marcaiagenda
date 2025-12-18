@@ -1,656 +1,660 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Layout from './components/Layout.tsx';
 import ProfessionalCard from './components/ProfessionalCard.tsx';
-import AIAssistant from './components/AIAssistant.tsx';
-import DirectoryTree from './components/DirectoryTree.tsx';
 import { Professional, AppView, Service, Appointment } from './types.ts';
 import { supabase } from './lib/supabase.ts';
 
-const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-
-const DEFAULT_PROFESSIONALS: Professional[] = [];
-
-const DeveloperPanel: React.FC<{ 
-  professionals: Professional[];
-  onRefresh: () => void; 
-}> = ({ professionals, onRefresh }) => {
-  const [pwd, setPwd] = useState('');
-  const [authed, setAuthed] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [sqlQuery, setSqlQuery] = useState('');
-  const [sqlResult, setSqlResult] = useState<string | null>(null);
-  
-  const [newProf, setNewProf] = useState({ 
-    name: '', 
-    salonName: '',
-    category: '', 
-    city: '', 
-    username: '', 
-    password: '',
-    resetWord: '',
-    expireDays: -1
-  });
-
-  if (!authed) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center p-4">
-        <div className="bg-slate-900 p-8 rounded-3xl text-white w-full max-w-sm space-y-6 text-center shadow-2xl animate-in fade-in zoom-in duration-300">
-          <h2 className="text-2xl font-bold">Modo Desenvolvedor</h2>
-          <p className="text-slate-400 text-sm">Insira a senha mestra para gerenciar a arquitetura.</p>
-          <input 
-            type="password" 
-            className="w-full bg-slate-800 border-none rounded-xl px-4 py-3 text-center text-xl font-mono text-indigo-400 placeholder:text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="••••••"
-            value={pwd}
-            onChange={(e) => setPwd(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && pwd === '220624' && setAuthed(true)}
-          />
-          <button 
-            onClick={() => pwd === '220624' ? setAuthed(true) : alert('Senha incorreta')}
-            className="w-full py-4 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-700 transition-all active:scale-95"
-          >
-            Acessar Painel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const handleExecuteSQL = async () => {
-    setLoading(true);
-    setSqlResult(null);
-    try {
-      // Nota: exec_sql RPC deve estar habilitado no seu Supabase
-      const { data, error } = await supabase.rpc('exec_sql', { query: sqlQuery });
-      if (error) throw error;
-      setSqlResult(JSON.stringify(data, null, 2) || 'Sucesso: Query executada.');
-      onRefresh();
-    } catch (err: any) {
-      setSqlResult('Erro SQL: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    const cleanUsername = newProf.username.trim().toLowerCase().replace(/\s+/g, '');
-    if (!newProf.name || !cleanUsername || (!editingId && !newProf.password)) {
-      alert('Preencha nome completo, usuário e senha.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (editingId) {
-        const { error } = await supabase.from('professionals').update({
-          name: newProf.name,
-          salon_name: newProf.salonName,
-          category: newProf.category,
-          city: newProf.city,
-          expire_days: newProf.expireDays,
-          reset_word: newProf.resetWord,
-        }).eq('id', editingId);
-        if (error) throw error;
-      } else {
-        const authEmail = `${cleanUsername}@marcai.dev`;
-        const { error: authError } = await supabase.auth.signUp({
-          email: authEmail,
-          password: newProf.password,
-          options: { data: { full_name: newProf.name, role: 'professional' } }
-        });
-        if (authError) throw authError;
-
-        const professionalData = {
-          name: newProf.name,
-          salon_name: newProf.salonName,
-          category: newProf.category || 'Geral',
-          city: newProf.city || 'Remoto',
-          slug: cleanUsername,
-          bio: '', // Deixa em branco para preenchimento manual
-          image_url: 'https://picsum.photos/seed/default/400/300',
-          rating: 5.0,
-          expire_days: newProf.expireDays,
-          reset_word: newProf.resetWord,
-          services: [] // Deixa em branco para preenchimento manual
-        };
-
-        const { error: dbError } = await supabase.from('professionals').insert([professionalData]);
-        if (dbError) throw dbError;
-      }
-      
-      setNewProf({ name: '', salonName: '', category: '', city: '', username: '', password: '', resetWord: '', expireDays: -1 });
-      setEditingId(null);
-      onRefresh();
-      alert('Operação realizada com sucesso!');
-    } catch (err: any) {
-      alert('Erro: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEdit = (p: Professional) => {
-    setEditingId(p.id);
-    setNewProf({
-      name: p.name,
-      salonName: p.salonName || '',
-      category: p.category,
-      city: p.city,
-      username: p.slug,
-      password: '',
-      resetWord: p.resetWord || '',
-      expireDays: p.expireDays || -1
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Deseja realmente excluir este profissional?')) return;
-    try {
-      const { error } = await supabase.from('professionals').delete().eq('id', id);
-      if (error) throw error;
-      onRefresh();
-    } catch (err: any) {
-      alert('Erro ao excluir: ' + err.message);
-    }
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto py-12 px-4 space-y-12 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900">🛠️ Painel Administrativo</h2>
-          <p className="text-slate-500">Gestão de Arquitetura e SQL</p>
-        </div>
-        <button onClick={() => setAuthed(false)} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold hover:bg-red-100 transition-colors">Sair</button>
-      </div>
-      
-      <div className="grid lg:grid-cols-2 gap-8 items-start">
-        <div className="space-y-8">
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-            <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Editar Profissional' : 'Novo Profissional'}</h3>
-            <div className="space-y-4">
-              <input placeholder="Nome Completo" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={newProf.name} onChange={(e) => setNewProf({...newProf, name: e.target.value})} />
-              <div className="grid grid-cols-3 gap-3">
-                <input placeholder="Categoria" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.category} onChange={(e) => setNewProf({...newProf, category: e.target.value})} />
-                <input placeholder="Salão" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.salonName} onChange={(e) => setNewProf({...newProf, salonName: e.target.value})} />
-                <input placeholder="Cidade" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.city} onChange={(e) => setNewProf({...newProf, city: e.target.value})} />
-              </div>
-              <button disabled={loading} onClick={handleRegister} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">
-                {loading ? 'Processando...' : 'Confirmar Registro'}
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 p-8 rounded-3xl text-white space-y-6 shadow-2xl">
-            <h3 className="text-xl font-bold text-indigo-400">🚀 Gerador de SQL (Supabase)</h3>
-            <div className="space-y-4">
-              <textarea 
-                placeholder="Ex: UPDATE professionals SET services = '[]' WHERE id = '...';" 
-                className="w-full h-32 bg-slate-800 border border-slate-700 rounded-xl p-4 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                value={sqlQuery}
-                onChange={(e) => setSqlQuery(e.target.value)}
-              ></textarea>
-              <button 
-                onClick={handleExecuteSQL}
-                disabled={loading || !sqlQuery}
-                className="w-full py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-700 transition-all active:scale-95"
-              >
-                Executar Query SQL
-              </button>
-              {sqlResult && (
-                <pre className="p-4 bg-black/40 rounded-xl text-[10px] overflow-auto max-h-40 border border-slate-700 text-emerald-400">
-                  {sqlResult}
-                </pre>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Lista de Profissionais</h3>
-            <div className="space-y-3">
-              {professionals.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover" />
-                    <div>
-                      <p className="font-bold text-sm text-slate-900">{p.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase">{p.category} • {p.city}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleEdit(p)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                    </button>
-                    <button onClick={() => handleDelete(p.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <DirectoryTree />
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.LANDING);
-  const [dashboardTab, setDashboardTab] = useState<'agendamentos' | 'perfil' | 'horarios' | 'galeria'>('agendamentos');
-  const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [bookingStep, setBookingStep] = useState<'selection' | 'review'>('selection');
-  const [clientData, setClientData] = useState({ name: '', whatsapp: '', terms: false });
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  
+  // Estados de Login
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Estados do Dashboard
+  const [dashTab, setDashTab] = useState<'appointments' | 'pre_bookings' | 'profile' | 'hours' | 'gallery'>('appointments');
+  const [appointments, setAppointments] = useState<any[]>([
+    { id: '1', clientName: 'Ricardo Silva', serviceName: 'Corte Degradê', time: '14:30', status: 'confirmed' },
+    { id: '2', clientName: 'Ana Souza', serviceName: 'Coloração', time: '16:00', status: 'confirmed' }
+  ]);
+  const [preBookings, setPreBookings] = useState<any[]>([
+    { id: '3', clientName: 'Marcos Oliveira', serviceName: 'Barba e Toalha Quente', time: '10:00', status: 'pending' }
+  ]);
+
+  // Dados do Cliente (Agendamento)
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+
+  // Estados de Filtro
+  const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [profileData, setProfileData] = useState({
-    id: '',
-    name: '',
-    bio: '',
-    whatsapp: '',
-    address: '',
-    customLink: '',
-    services: [] as Service[],
-    photo: 'https://picsum.photos/seed/marcos/100'
-  });
 
   const fetchProfessionals = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase.from('professionals').select('*');
       if (error) throw error;
-      if (data && data.length > 0) {
+      if (data) {
         setProfessionals(data.map((p: any) => ({ 
           id: p.id,
           slug: p.slug,
           name: p.name,
-          salonName: p.salon_name,
           category: p.category,
           city: p.city,
           bio: p.bio || '',
           imageUrl: p.image_url,
           rating: p.rating || 5.0,
           services: p.services || [],
+          salonName: p.salon_name,
           gallery: p.gallery || [],
-          whatsapp: p.whatsapp || '',
-          address: p.address || '',
-          expireDays: p.expire_days,
-          resetWord: p.reset_word
+          whatsapp: p.whatsapp,
+          address: p.address
         })));
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => { fetchProfessionals(); }, []);
+  useEffect(() => {
+    fetchProfessionals();
+  }, []);
 
-  const activeProfessionalInModal = useMemo(() => {
-    if (!selectedProfessional) return null;
-    return professionals.find(p => p.id === selectedProfessional.id) || selectedProfessional;
-  }, [selectedProfessional, professionals]);
+  const cities = useMemo(() => Array.from(new Set(professionals.map(p => p.city))).sort(), [professionals]);
+  const categories = useMemo(() => Array.from(new Set(professionals.map(p => p.category))).sort(), [professionals]);
 
   const filteredProfessionals = useMemo(() => {
     return professionals.filter(p => {
-      const matchText = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                       p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                       (p.salonName && p.salonName.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchCity = cityFilter === '' || p.city === cityFilter;
-      const matchCat = categoryFilter === '' || p.category === categoryFilter;
-      return matchText && matchCity && matchCat;
+      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
+                          p.bio.toLowerCase().includes(search.toLowerCase());
+      const matchesCity = cityFilter === '' || p.city === cityFilter;
+      const matchesCategory = categoryFilter === '' || p.category === categoryFilter;
+      return matchesSearch && matchesCity && matchesCategory;
     });
-  }, [searchTerm, cityFilter, categoryFilter, professionals]);
+  }, [professionals, search, cityFilter, categoryFilter]);
 
   const handleNavigate = (newView: AppView) => {
-    if (newView === AppView.LANDING) setIsLoggedIn(false);
+    if (newView === AppView.LANDING && isLoggedIn) {
+      setIsLoggedIn(false);
+    }
     setView(newView);
-  };
-
-  const handleAddService = () => {
-    const newService: Service = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: '',
-      duration: 30,
-      price: 0,
-      preBooking: false
-    };
-    setProfileData(prev => ({ ...prev, services: [...prev.services, newService] }));
-  };
-
-  const handleUpdateService = (id: string, field: keyof Service, value: any) => {
-    setProfileData(prev => ({
-      ...prev,
-      services: prev.services.map(s => s.id === id ? { ...s, [field]: value } : s)
-    }));
-  };
-
-  const handleDeleteService = (id: string) => {
-    setProfileData(prev => ({
-      ...prev,
-      services: prev.services.filter(s => s.id !== id)
-    }));
-  };
-
-  const handleSaveProfile = async () => {
-    if (!profileData.id) return;
-    setIsSaving(true);
-    try {
-      const { error } = await supabase.from('professionals')
-        .update({
-          bio: profileData.bio,
-          whatsapp: profileData.whatsapp,
-          address: profileData.address,
-          services: profileData.services,
-          image_url: profileData.photo,
-          gallery: galleryImages
-        })
-        .eq('id', profileData.id);
-      if (error) throw error;
-      await fetchProfessionals();
-      alert("Perfil e Serviços atualizados com sucesso!");
-    } catch (err: any) {
-      alert("Falha ao salvar: " + err.message);
-    } finally {
-      setIsSaving(false);
+    if (newView !== AppView.PROFESSIONAL_PROFILE) {
+        setSelectedService(null);
+        setSelectedTime(null);
+        setClientName('');
+        setClientPhone('');
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileData(prev => ({ ...prev, photo: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleFinishBooking = () => {
-    if (!clientData.name || !clientData.whatsapp || !clientData.terms) {
-      alert("Preencha todos os campos.");
-      return;
-    }
-    const targetProf = activeProfessionalInModal;
-    const msg = `Olá ${targetProf?.name}, novo agendamento MarcAI:\n📍 ${selectedService?.name}\n👤 ${clientData.name}\n📱 ${clientData.whatsapp}`;
-    const link = `https://wa.me/${targetProf?.whatsapp?.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
-    window.open(link, '_blank');
-    setSelectedProfessional(null);
-  };
-
-  const handleProfessionalLogin = async (userData: any) => {
-    try {
-      const { data } = await supabase.from('professionals').select('*').eq('slug', userData.slug).single();
-      if (!data) throw new Error("Acesso não encontrado.");
-      setProfileData({
-        id: data.id,
-        name: data.name,
-        bio: data.bio || '',
-        whatsapp: data.whatsapp || '',
-        address: data.address || '',
-        customLink: data.slug,
-        services: data.services || [],
-        photo: data.image_url || 'https://picsum.photos/seed/marcos/100'
-      });
-      setGalleryImages(data.gallery || []);
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
       setIsLoggedIn(true);
       setView(AppView.PROFESSIONAL_DASHBOARD);
-    } catch (err: any) {
-      alert(err.message);
+      setLoading(false);
+    }, 800);
+  };
+
+  const handleDeleteAppointment = (id: string, isPre: boolean) => {
+    if (confirm("Deseja realmente excluir este agendamento?")) {
+      if (isPre) setPreBookings(prev => prev.filter(a => a.id !== id));
+      else setAppointments(prev => prev.filter(a => a.id !== id));
     }
   };
 
-  const modalProfessional = activeProfessionalInModal;
+  const handleSelectProfessional = (p: Professional) => {
+    setSelectedProfessional(p);
+    setSelectedService(null);
+    setSelectedTime(null);
+    setView(AppView.PROFESSIONAL_PROFILE);
+    window.scrollTo(0, 0);
+  };
+
+  const handleConfirmBooking = () => {
+    if (!selectedTime || !selectedService || !selectedProfessional || !clientName || !clientPhone) {
+      alert("Por favor, preencha todos os campos para confirmar.");
+      return;
+    }
+
+    const dateFormatted = new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR');
+    const message = `Olá ${selectedProfessional.name}, gostaria de agendar: *${selectedService.name}* para o dia *${dateFormatted}* às *${selectedTime}*. Meu nome é ${clientName}. Está confirmado?`;
+    const whatsappUrl = `https://wa.me/${selectedProfessional.whatsapp?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    
+    window.open(whatsappUrl, '_blank');
+    setView(AppView.CLIENTS);
+  };
+
+  const nextDays = useMemo(() => {
+    const days = [];
+    for (let i = 0; i < 15; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  }, []);
+
+  const timeSlots = ["09:00", "09:45", "10:30", "11:15", "14:00", "14:45", "15:30", "16:15", "17:00"];
 
   return (
     <Layout activeView={view} onNavigate={handleNavigate} isLoggedIn={isLoggedIn}>
-      {view === AppView.LANDING && (
-        <div className="relative min-h-[80vh] flex flex-col items-center justify-center px-4 bg-slate-50">
-          <div className="max-w-5xl text-center space-y-12 animate-in fade-in duration-700">
-            <h2 className="text-5xl md:text-7xl font-black text-slate-900 leading-tight">
-              Agendamentos que <span className="text-indigo-600">aprendem</span> com você.
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto w-full">
-              <button onClick={() => setView(AppView.CLIENTS)} className="p-10 bg-white border-2 border-slate-100 rounded-[32px] hover:border-indigo-600 hover:-translate-y-2 transition-all">
-                <div className="w-16 h-16 mx-auto mb-4 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+      <div className="max-w-7xl mx-auto py-8 px-4">
+        
+        {view === AppView.LANDING && (
+          <div className="flex flex-col items-center justify-center min-h-[70vh] w-full max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Como deseja continuar?</h2>
+              <p className="text-slate-500 font-medium">Escolha o seu perfil para acessar o MarcAI Agenda.</p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-8 w-full">
+              <button onClick={() => setView(AppView.CLIENTS)} className="group relative bg-white border border-slate-200 p-8 rounded-[40px] shadow-sm hover:shadow-xl hover:border-indigo-500 transition-all duration-300 text-center flex flex-col items-center gap-6">
+                <div className="w-32 h-32 bg-indigo-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 transition-colors duration-300">
+                  <svg className="w-16 h-16 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">Sou cliente</h3>
-                <p className="text-slate-500 text-sm mt-2">agendar um serviço</p>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">Sou cliente</h3>
+                  <p className="text-slate-500 text-sm">Quero encontrar profissionais e agendar um horário.</p>
+                </div>
               </button>
-              <button onClick={() => setView(AppView.PROFESSIONAL_LOGIN)} className="p-10 bg-white border-2 border-slate-100 rounded-[32px] hover:border-indigo-600 hover:-translate-y-2 transition-all">
-                <div className="w-16 h-16 mx-auto mb-4 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              <button onClick={() => setView(AppView.PROFESSIONAL_LOGIN)} className="group relative bg-white border border-slate-200 p-8 rounded-[40px] shadow-sm hover:shadow-xl hover:border-indigo-500 transition-all duration-300 text-center flex flex-col items-center gap-6">
+                <div className="w-32 h-32 bg-indigo-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 transition-colors duration-300">
+                  <svg className="w-16 h-16 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900">Área Profissional</h3>
-                <p className="text-slate-500 text-sm mt-2">gerenciar minha agenda</p>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">Sou profissional</h3>
+                  <p className="text-slate-500 text-sm">Quero gerenciar meus serviços e minha agenda.</p>
+                </div>
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {view === AppView.CLIENTS && (
-        <div className="max-w-7xl mx-auto py-12 px-4">
-          <h2 className="text-4xl font-black text-slate-900 mb-8">Marketplace MarcAI</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProfessionals.map((prof) => (
-              <ProfessionalCard key={prof.id} professional={prof} onSelect={(p) => setSelectedProfessional(p)} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {view === AppView.PROFESSIONAL_LOGIN && (
-        <div className="min-h-[70vh] flex items-center justify-center px-4">
-          <div className="bg-white p-10 rounded-[40px] shadow-2xl border border-slate-100 w-full max-w-md space-y-8">
-            <h2 className="text-3xl font-bold text-center">Login Profissional</h2>
-            <div className="space-y-4">
-              <input placeholder="Usuário (slug)" className="w-full px-4 py-4 border rounded-2xl bg-slate-50 outline-none" onChange={(e) => setProfileData(p => ({...p, customLink: e.target.value}))} />
-              <button onClick={() => handleProfessionalLogin({slug: profileData.customLink})} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black hover:bg-indigo-700 transition-all">ENTRAR NO PAINEL</button>
+        {view === AppView.CLIENTS && (
+          <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500">
+            <div className="text-center space-y-2">
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Encontre o Profissional Ideal</h2>
+              <p className="text-slate-500 font-medium">Busque por nome, cidade ou categoria de serviço.</p>
             </div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
+              <div className="flex-1 relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span>
+                <input type="text" placeholder="Ex: Barbeiro, Esteticista..." className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <div className="flex gap-3">
+                <select className="bg-slate-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}><option value="">Todas as Cidades</option>{cities.map(city => <option key={city} value={city}>{city}</option>)}</select>
+                <select className="bg-slate-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">Todas Categorias</option>{categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select>
+              </div>
+            </div>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4"><div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">
+                {filteredProfessionals.map(p => <ProfessionalCard key={p.id} professional={p} onSelect={handleSelectProfessional} />)}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {view === AppView.PROFESSIONAL_DASHBOARD && (
-        <div className="max-w-7xl mx-auto py-12 px-4">
-          <div className="flex justify-center mb-8">
-            <nav className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-2xl">
-              <button onClick={() => setDashboardTab('agendamentos')} className={`px-6 py-2.5 rounded-xl text-xs font-black ${dashboardTab === 'agendamentos' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>AGENDAMENTOS</button>
-              <button onClick={() => setDashboardTab('perfil')} className={`px-6 py-2.5 rounded-xl text-xs font-black ${dashboardTab === 'perfil' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>PERFIL & SERVIÇOS</button>
-              <button onClick={() => setDashboardTab('horarios')} className={`px-6 py-2.5 rounded-xl text-xs font-black ${dashboardTab === 'horarios' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>HORÁRIOS</button>
-            </nav>
-          </div>
+        {view === AppView.PROFESSIONAL_PROFILE && selectedProfessional && (
+          <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
+            <button onClick={() => setView(AppView.CLIENTS)} className="mb-8 flex items-center gap-2 text-slate-500 font-bold hover:text-indigo-600 transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              Voltar para busca
+            </button>
 
-          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm min-h-[500px] relative">
-            {dashboardTab === 'perfil' && (
-              <div className="space-y-8 pb-24">
-                <h2 className="text-2xl font-black text-slate-900">Perfil e Serviços</h2>
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold">Descrição do Perfil</label>
-                      <textarea className="w-full p-4 border border-slate-200 rounded-2xl min-h-[140px] bg-slate-50" value={profileData.bio} onChange={(e) => setProfileData({...profileData, bio: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold">Foto do Perfil</label>
-                      <div className="flex items-center gap-4">
-                        <img src={profileData.photo} className="w-20 h-20 rounded-2xl object-cover bg-slate-100" />
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
-                        <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100">Escolher arquivo</button>
-                      </div>
-                    </div>
+            <div className="bg-white rounded-[48px] overflow-hidden shadow-sm border border-slate-100">
+              <div className="p-8 md:p-12 flex flex-col md:flex-row items-center gap-8 border-b border-slate-50">
+                <img src={selectedProfessional.imageUrl} className="w-32 h-32 md:w-48 md:h-48 rounded-[32px] object-cover shadow-xl border-4 border-white" alt={selectedProfessional.name} />
+                <div className="text-center md:text-left flex-1">
+                  <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-4">
+                    <span className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">{selectedProfessional.category}</span>
+                    <span className="bg-slate-50 text-slate-500 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">{selectedProfessional.city}</span>
                   </div>
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold">WhatsApp de Atendimento</label>
-                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" value={profileData.whatsapp} onChange={(e) => setProfileData({...profileData, whatsapp: e.target.value})} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold">Endereço do Local</label>
-                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" value={profileData.address} onChange={(e) => setProfileData({...profileData, address: e.target.value})} />
-                    </div>
-                  </div>
+                  <h1 className="text-4xl font-black text-slate-900 mb-2">{selectedProfessional.name}</h1>
+                  {selectedProfessional.salonName && <p className="text-slate-400 font-bold uppercase tracking-tighter text-sm mb-4">{selectedProfessional.salonName}</p>}
+                  <p className="text-slate-600 leading-relaxed max-w-xl">{selectedProfessional.bio}</p>
                 </div>
+              </div>
 
-                <div className="pt-10 border-t border-slate-100">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black">Meus Serviços</h3>
-                    <button onClick={handleAddService} className="text-indigo-600 font-bold text-sm">+ Adicionar Serviço</button>
+              <div className="grid grid-cols-2 gap-px bg-slate-50 border-b border-slate-50">
+                <a href={`https://wa.me/${selectedProfessional.whatsapp?.replace(/\D/g, '')}`} target="_blank" className="bg-white p-6 flex flex-col items-center gap-2 hover:bg-emerald-50 transition-colors">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                   </div>
+                  <span className="text-sm font-black text-slate-900">Conversar</span>
+                </a>
+                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedProfessional.address || '')}`} target="_blank" className="bg-white p-6 flex flex-col items-center gap-2 hover:bg-indigo-50 transition-colors">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  </div>
+                  <span className="text-sm font-black text-slate-900">Localização</span>
+                </a>
+              </div>
+
+              {!selectedService ? (
+                <div className="p-8 bg-slate-50/30">
+                  <h3 className="text-xl font-black text-slate-900 mb-6">Nossos Serviços</h3>
                   <div className="space-y-4">
-                    {profileData.services.map((s) => (
-                      <div key={s.id} className="p-6 bg-slate-50 border border-slate-200 rounded-[28px] grid md:grid-cols-[1fr,100px,100px,180px,50px] gap-4 items-end animate-in fade-in">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">SERVIÇO</span>
-                          <input value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
+                    {selectedProfessional.services?.map((service: Service) => (
+                      <div key={service.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between hover:border-indigo-200 transition-colors group">
+                        <div className="flex-1">
+                          <h4 className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{service.name}</h4>
+                          <p className="text-slate-400 text-sm font-medium">{service.duration} min • Sugestão MarcAI</p>
                         </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">VALOR (R$)</span>
-                          <input type="number" value={s.price} onChange={e => handleUpdateService(s.id, 'price', parseFloat(e.target.value))} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-slate-900 mb-2">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.price)}
+                          </p>
+                          <button onClick={() => setSelectedService(service)} className="px-6 py-2 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95">Agendar</button>
                         </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">MINUTOS</span>
-                          <input type="number" value={s.duration} onChange={e => handleUpdateService(s.id, 'duration', parseInt(e.target.value))} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
-                        </div>
-                        <div className="flex items-center gap-2 h-full pb-3.5">
-                          <input type="checkbox" className="w-5 h-5 accent-indigo-600 rounded" checked={s.preBooking} onChange={e => handleUpdateService(s.id, 'preBooking', e.target.checked)} />
-                          <span className="text-[11px] font-black text-slate-600 tracking-tight uppercase">Pré-agendamento</span>
-                        </div>
-                        <button onClick={() => handleDeleteService(s.id)} className="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center hover:bg-red-600">✕</button>
                       </div>
                     ))}
                   </div>
                 </div>
-
-                <div className="absolute bottom-6 right-8">
-                  <button onClick={handleSaveProfile} disabled={isSaving} className="bg-[#4338ca] text-white px-14 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-800 transition-all disabled:opacity-50">
-                    {isSaving ? 'SALVANDO...' : 'Salvar Perfil'}
-                  </button>
-                </div>
-              </div>
-            )}
-            {dashboardTab === 'agendamentos' && <div className="p-20 text-center text-slate-400 italic font-medium">Lista de agendamentos agendados hoje.</div>}
-            {dashboardTab === 'horarios' && <div className="p-20 text-center text-slate-400 italic font-medium">Configurações de horários de atendimento.</div>}
-          </div>
-        </div>
-      )}
-
-      {view === AppView.DEVELOPER_PANEL && <DeveloperPanel professionals={professionals} onRefresh={fetchProfessionals} />}
-
-      {modalProfessional && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
-            <button onClick={() => setSelectedProfessional(null)} className="absolute top-6 right-6 z-50 bg-slate-900/40 hover:bg-slate-900/60 w-10 h-10 rounded-full text-white flex items-center justify-center">✕</button>
-            <div className="relative h-80">
-              <img src={modalProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-transparent to-transparent"></div>
-              
-              <div className="absolute -bottom-12 left-12 p-1.5 bg-white rounded-[32px] shadow-2xl border border-slate-100 z-10">
-                <img src={modalProfessional.imageUrl} className="w-32 h-32 rounded-[28px] object-cover" />
-              </div>
-
-              <div className="absolute top-10 left-10 p-6 bg-slate-900/50 backdrop-blur-sm rounded-3xl border border-white/10">
-                <span className="bg-[#4338ca] text-[9px] font-black uppercase px-3 py-1 rounded-full text-white mb-2 inline-block shadow-lg">{modalProfessional.category.toUpperCase()}</span>
-                <h2 className="text-5xl font-black text-white leading-none">{modalProfessional.name}</h2>
-                <div className="flex items-center gap-2 mt-2 text-white/80 text-xs font-bold uppercase tracking-tight">🏪 {modalProfessional.salonName || 'MarcAI Studio'}</div>
-              </div>
-
-              <div className="absolute top-10 right-20 flex flex-col gap-3">
-                {modalProfessional.whatsapp && (
-                  <a href={`https://wa.me/${modalProfessional.whatsapp.replace(/\D/g, '')}`} target="_blank" className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-white/50 shadow-xl hover:bg-white transition-all group min-w-[200px]">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">WhatsApp direto</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">📱</span>
-                      <span className="text-[#4338ca] font-black text-sm group-hover:underline">{modalProfessional.whatsapp}</span>
-                    </div>
-                  </a>
-                )}
-                {modalProfessional.address && (
-                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(modalProfessional.address)}`} target="_blank" className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-white/50 shadow-xl hover:bg-white transition-all group min-w-[200px]">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Endereço / Local</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">📍</span>
-                      <span className="text-slate-700 font-bold text-[10px] line-clamp-1 group-hover:underline">{modalProfessional.address}</span>
-                    </div>
-                  </a>
-                )}
-              </div>
-            </div>
-
-            <div className="p-10 pt-20 space-y-12">
-              <div className="grid lg:grid-cols-[1fr,400px] gap-12">
-                <div className="space-y-12">
-                  <div className="space-y-6">
-                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Sobre</h4>
-                    <p className="text-slate-600 leading-relaxed text-lg whitespace-pre-line">{modalProfessional.bio || 'Profissional parceiro MarcAI.'}</p>
+              ) : (
+                <div className="p-8 bg-indigo-50/30 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Finalizar Agendamento</h3>
+                    <button onClick={() => {setSelectedService(null); setSelectedTime(null);}} className="text-xs font-bold text-indigo-600 uppercase tracking-widest hover:underline">Alterar serviço</button>
                   </div>
 
-                  <div className="space-y-6">
-                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Agendar Serviço</h4>
-                    <div className="space-y-4">
-                      {modalProfessional.services.length === 0 ? (
-                        <p className="text-slate-400 italic p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">Nenhum serviço disponível no momento.</p>
-                      ) : (
-                        modalProfessional.services.map(s => (
-                          <button key={s.id} onClick={() => { setSelectedService(s); setBookingStep('selection'); }} className="w-full p-7 bg-slate-50 border border-slate-200 rounded-[32px] flex items-center justify-between hover:bg-white hover:border-indigo-200 transition-all group shadow-sm hover:shadow-xl">
-                            <div className="flex flex-col text-left">
-                              <span className="font-black text-slate-900 text-xl group-hover:text-[#4338ca] transition-colors">{s.name}</span>
-                              <div className="flex items-center gap-3 mt-1">
-                                 <span className="text-slate-400 text-xs font-bold">🕒 {s.duration} min</span>
-                                 {s.preBooking && <span className="bg-amber-100 text-amber-700 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">Pré-agendamento</span>}
-                              </div>
-                            </div>
-                            <span className="font-black text-2xl text-[#4338ca] tracking-tight">R$ {s.price}</span>
+                  <div className="bg-white p-6 rounded-[32px] shadow-sm border border-indigo-100 mb-8">
+                    <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-6">Selecione o Dia</p>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                      {nextDays.map((date, i) => {
+                        const dateStr = date.toISOString().split('T')[0];
+                        const isSelected = selectedDate === dateStr;
+                        return (
+                          <button 
+                            key={i}
+                            onClick={() => setSelectedDate(dateStr)}
+                            className={`p-3 rounded-2xl flex flex-col items-center justify-center transition-all border ${isSelected ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100 scale-105 z-10' : 'bg-slate-50 text-slate-400 border-transparent hover:border-indigo-200 hover:bg-indigo-50'}`}
+                          >
+                            <span className="text-[10px] font-black uppercase mb-1">{date.toLocaleDateString('pt-BR', { weekday: 'short' })}</span>
+                            <span className="text-lg font-black">{date.getDate()}</span>
+                            <span className="text-[9px] opacity-60 font-bold">{date.toLocaleDateString('pt-BR', { month: 'short' })}</span>
                           </button>
-                        ))
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
-                <div className="lg:sticky lg:top-10 h-fit">
-                  <AIAssistant context={modalProfessional} />
-                </div>
-              </div>
 
-              {selectedService && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-                  <div className="bg-white p-10 rounded-[40px] w-full max-w-md shadow-2xl space-y-8 animate-in zoom-in-95">
-                    <div className="flex justify-between items-start">
-                      <h3 className="text-3xl font-black tracking-tight leading-tight">Agendar {selectedService.name}</h3>
-                      <button onClick={() => setSelectedService(null)} className="text-slate-400 font-bold text-xl hover:text-red-500 transition-colors">✕</button>
-                    </div>
-                    <div className="space-y-6">
-                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="Seu Nome Completo" value={clientData.name} onChange={e => setClientData({...clientData, name: e.target.value})} />
-                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="WhatsApp (DDD+Número)" value={clientData.whatsapp} onChange={e => setClientData({...clientData, whatsapp: e.target.value})} />
-                      <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <input type="checkbox" className="w-6 h-6 accent-[#4338ca] rounded cursor-pointer" checked={clientData.terms} onChange={e => setClientData({...clientData, terms: e.target.checked})} />
-                        <span className="text-[11px] font-bold text-slate-600 leading-tight">Estou ciente das políticas de agendamento do MarcAI.</span>
+                  <div className="grid md:grid-cols-2 gap-8 mb-8">
+                    <div className="bg-white p-6 rounded-[32px] shadow-sm border border-indigo-100">
+                      <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-4">Escolha o Horário</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {timeSlots.map(time => (
+                          <button 
+                            key={time}
+                            onClick={() => setSelectedTime(time)}
+                            className={`py-3 rounded-xl text-xs font-black transition-all border ${selectedTime === time ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-50 text-slate-500 border-transparent hover:border-indigo-200'}`}
+                          >
+                            {time}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <button onClick={handleFinishBooking} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black shadow-xl hover:bg-indigo-800 transition-all active:scale-95">CONCLUIR AGENDAMENTO</button>
+
+                    <div className="bg-white p-6 rounded-[32px] shadow-sm border border-indigo-100 space-y-4">
+                      <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-4">Seus Dados</p>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Nome Completo</label>
+                        <input type="text" placeholder="Como quer ser chamado?" className="w-full bg-slate-50 border-none rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">WhatsApp</label>
+                        <input type="tel" placeholder="(00) 00000-0000" className="w-full bg-slate-50 border-none rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedTime && (
+                    <div className="bg-white p-8 rounded-[40px] border border-indigo-100 shadow-xl shadow-indigo-100/20 flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4">
+                      <div className="text-center md:text-left">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Resumo do Agendamento</p>
+                        <h4 className="text-2xl font-black text-slate-900">{selectedService.name} às {selectedTime}</h4>
+                        <p className="text-slate-500 text-sm">Para {new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                      </div>
+                      <button onClick={handleConfirmBooking} disabled={!clientName || !clientPhone} className="w-full md:w-auto px-12 py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-2xl shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100">Confirmar Agendamento</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!selectedService && selectedProfessional.gallery && selectedProfessional.gallery.length > 0 && (
+                <div className="p-8 border-t border-slate-50">
+                  <h3 className="text-xl font-black text-slate-900 mb-6">Trabalhos Realizados</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {selectedProfessional.gallery.map((img, idx) => (
+                      <div key={idx} className="aspect-square rounded-3xl overflow-hidden shadow-md group cursor-zoom-in">
+                        <img src={img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="Galeria" />
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {view === AppView.PROFESSIONAL_LOGIN && (
+          <div className="flex items-center justify-center min-h-[70vh] w-full px-4 animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-white p-10 md:p-14 rounded-[48px] shadow-2xl shadow-indigo-100 border border-slate-100 w-full max-w-lg">
+              <div className="text-center mb-10">
+                <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-3xl font-black mx-auto mb-6 shadow-xl shadow-indigo-100">M</div>
+                <h2 className="text-3xl font-black text-slate-900 mb-2">Login Profissional</h2>
+                <p className="text-slate-500 font-medium">Gerencie sua agenda e serviços</p>
+              </div>
+              
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">E-mail de acesso</label>
+                  <input 
+                    type="email" 
+                    required 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Seu melhor e-mail" 
+                    className="w-full bg-slate-50 border-none rounded-[24px] px-6 py-4 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Senha secreta</label>
+                  <input 
+                    type="password" 
+                    required 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Sua senha" 
+                    className="w-full bg-slate-50 border-none rounded-[24px] px-6 py-4 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between px-2">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500" 
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                    />
+                    <span className="text-sm font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">Lembrar-me</span>
+                  </label>
+                  <button type="button" className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Esqueci a senha</button>
+                </div>
+
+                <button 
+                  disabled={loading}
+                  className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-4"
+                >
+                  {loading ? 'Entrando...' : 'Entrar no Painel'}
+                  {!loading && <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>}
+                </button>
+                
+                <button type="button" onClick={() => setView(AppView.LANDING)} className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm">
+                  Voltar ao início
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {view === AppView.PROFESSIONAL_DASHBOARD && (
+          <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
+            <div className="flex flex-col md:flex-row gap-8">
+              {/* Menu Lateral Dashboard */}
+              <aside className="md:w-72 space-y-2">
+                <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm mb-6 flex flex-col items-center text-center">
+                  <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-black text-2xl mb-4 border-2 border-indigo-100 shadow-inner">JD</div>
+                  <h4 className="font-black text-slate-900">João Donizete</h4>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Plano Pro</p>
+                </div>
+                
+                <button onClick={() => setDashTab('appointments')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'appointments' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                   Agendamentos
+                </button>
+                <button onClick={() => setDashTab('pre_bookings')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'pre_bookings' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                   Pré-agendamento
+                </button>
+                <button onClick={() => setDashTab('profile')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'profile' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                   Perfil e serviços
+                </button>
+                <button onClick={() => setDashTab('hours')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'hours' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                   Horários
+                </button>
+                <button onClick={() => setDashTab('gallery')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'gallery' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                   Galeria de fotos
+                </button>
+                
+                <div className="pt-8">
+                  <button onClick={() => setView(AppView.LANDING)} className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    Sair da conta
+                  </button>
+                </div>
+              </aside>
+
+              {/* Conteúdo Central Dashboard */}
+              <main className="flex-1 space-y-8">
+                {dashTab === 'appointments' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">Próximos Agendamentos</h3>
+                      <button className="px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-colors">Ver histórico</button>
+                    </div>
+                    <div className="grid gap-4">
+                      {appointments.length > 0 ? appointments.map(a => (
+                        <div key={a.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 group">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-600">{a.clientName[0]}</div>
+                            <div>
+                              <h5 className="font-bold text-slate-900">{a.clientName}</h5>
+                              <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="text-right">
+                              <p className="text-sm font-black text-indigo-600">Hoje, {a.time}</p>
+                              <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Confirmado</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleDeleteAppointment(a.id, false)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="py-20 text-center bg-white rounded-[32px] border border-dashed border-slate-200 text-slate-400 font-medium">Nenhum agendamento confirmado para hoje.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {dashTab === 'pre_bookings' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">Pré-agendamentos Pendentes</h3>
+                    </div>
+                    <div className="grid gap-4">
+                      {preBookings.length > 0 ? preBookings.map(a => (
+                        <div key={a.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center font-bold text-amber-600">{a.clientName[0]}</div>
+                            <div>
+                              <h5 className="font-bold text-slate-900">{a.clientName}</h5>
+                              <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right mr-4">
+                              <p className="text-sm font-black text-amber-600">Aguardando Aprovação</p>
+                              <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Horário solicitado: {a.time}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
+                              <button onClick={() => handleDeleteAppointment(a.id, true)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                            </div>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="py-20 text-center bg-white rounded-[32px] border border-dashed border-slate-200 text-slate-400 font-medium">Nenhuma solicitação pendente.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {dashTab === 'profile' && (
+                  <div className="space-y-6">
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Configurações do Perfil</h3>
+                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Nome Profissional</label>
+                          <input type="text" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="João Donizete" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">WhatsApp Comercial</label>
+                          <input type="tel" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="11999999999" placeholder="Ex: 11999999999" />
+                        </div>
+                      </div>
+                      
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cidade de Atendimento</label>
+                          <input type="text" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="São Paulo" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Categoria Principal</label>
+                          <select className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none cursor-pointer">
+                            <option value="barbearia">Barbearia</option>
+                            <option value="estetica">Estética</option>
+                            <option value="bem_estar">Bem Estar</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Endereço Completo</label>
+                        <input type="text" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="Rua Exemplo, 123, Bairro, São Paulo - SP" />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Bio Profissional</label>
+                        <textarea className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium h-32 resize-none" defaultValue="Especialista em cortes clássicos e modernos há mais de 10 anos." />
+                      </div>
+                      
+                      <div className="pt-8 border-t border-slate-50">
+                        <div className="flex items-center justify-between mb-6">
+                          <h4 className="text-xl font-black text-slate-900">Gerenciar Serviços</h4>
+                          <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">+ Adicionar</button>
+                        </div>
+                        <div className="space-y-3">
+                          {[
+                            { name: 'Corte de Cabelo', price: 60, dur: 45 },
+                            { name: 'Barba Tradicional', price: 40, dur: 30 }
+                          ].map((s, idx) => (
+                            <div key={idx} className="bg-slate-50 p-6 rounded-2xl flex items-center justify-between border border-transparent hover:border-indigo-200 transition-all">
+                              <div>
+                                <p className="font-bold text-slate-900">{s.name}</p>
+                                <p className="text-xs text-slate-400 font-bold uppercase">R$ {s.price},00 • {s.dur} min</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                                <button onClick={() => alert('Serviço removido (MVP)')} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all">Salvar Alterações</button>
+                    </div>
+                  </div>
+                )}
+
+                {dashTab === 'hours' && (
+                  <div className="space-y-6">
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Agenda de Atendimento</h3>
+                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-10">
+                      
+                      <div className="space-y-6">
+                         <p className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Expediente Semanal</p>
+                         <div className="space-y-4">
+                           {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map(day => (
+                             <div key={day} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                               <span className="font-bold text-slate-700 w-24">{day}</span>
+                               <div className="flex items-center gap-3">
+                                 <input type="text" className="w-20 bg-white border-none rounded-lg p-2 text-center text-sm font-bold shadow-sm" defaultValue="09:00" />
+                                 <span className="text-slate-300 font-black">às</span>
+                                 <input type="text" className="w-20 bg-white border-none rounded-lg p-2 text-center text-sm font-bold shadow-sm" defaultValue="18:00" />
+                               </div>
+                               <label className="relative inline-flex items-center cursor-pointer">
+                                 <input type="checkbox" className="sr-only peer" defaultChecked />
+                                 <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                               </label>
+                             </div>
+                           ))}
+                         </div>
+                      </div>
+
+                      <div className="pt-8 border-t border-slate-50">
+                        <div className="flex items-center justify-between mb-6">
+                           <p className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em]">Pausas e Almoço</p>
+                        </div>
+                        <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-indigo-600 shadow-sm"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                            <div>
+                              <p className="font-bold text-slate-900">Horário de Almoço</p>
+                              <p className="text-xs text-slate-500 font-bold uppercase">Diário • 12:00 às 13:00</p>
+                            </div>
+                          </div>
+                          <button className="text-slate-300 hover:text-red-500 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {dashTab === 'gallery' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                       <h3 className="text-2xl font-black text-slate-900 tracking-tight">Seu Portfólio</h3>
+                       <button className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">+ Carregar Fotos</button>
+                    </div>
+                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-4">
+                       <button className="aspect-square border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all gap-2 group">
+                         <svg className="w-8 h-8 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                         <span className="text-xs font-black uppercase tracking-widest">Nova Foto</span>
+                       </button>
+                       <div className="text-slate-400 text-sm font-medium flex items-center col-span-2">Adicione fotos reais de seus trabalhos para atrair mais clientes.</div>
+                    </div>
+                  </div>
+                )}
+              </main>
+            </div>
+          </div>
+        )}
+      </div>
     </Layout>
   );
 };
