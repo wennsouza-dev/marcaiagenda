@@ -13,16 +13,19 @@ const DEFAULT_PROFESSIONALS: Professional[] = [
   {
     id: '1', slug: 'marcos-barbeiro', name: 'Marcos Silva', salonName: 'Barbearia do Marcos', category: 'Beleza', city: 'São Paulo',
     bio: 'Especialista em visagismo e barboterapia.', imageUrl: 'https://picsum.photos/seed/barber/400/300',
-    rating: 4.9, services: [{ id: 's1', name: 'Corte de Cabelo', duration: 30, price: 50, preBooking: false }]
+    rating: 4.9, services: [{ id: 's1', name: 'Corte de Cabelo', duration: 30, price: 50, preBooking: false }],
+    gallery: ['https://picsum.photos/seed/1/400/300', 'https://picsum.photos/seed/2/400/300']
   }
 ];
 
 const DeveloperPanel: React.FC<{ 
+  professionals: Professional[];
   onRefresh: () => void; 
-}> = ({ onRefresh }) => {
+}> = ({ professionals, onRefresh }) => {
   const [pwd, setPwd] = useState('');
   const [authed, setAuthed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showTree, setShowTree] = useState(false);
   const [newProf, setNewProf] = useState({ 
     name: '', 
     salonName: '',
@@ -30,6 +33,7 @@ const DeveloperPanel: React.FC<{
     city: '', 
     username: '', 
     password: '',
+    resetWord: '',
     expireDays: -1
   });
 
@@ -92,6 +96,7 @@ const DeveloperPanel: React.FC<{
         imageUrl: `https://picsum.photos/seed/${cleanUsername}/400/300`,
         rating: 5.0,
         expire_days: newProf.expireDays,
+        reset_word: newProf.resetWord,
         services: [{ id: 'sx', name: 'Atendimento Padrão', duration: 45, price: 100 }]
       };
 
@@ -99,12 +104,23 @@ const DeveloperPanel: React.FC<{
       if (dbError) throw dbError;
 
       alert(`Profissional cadastrado com sucesso!\nAcesso: ${authEmail}`);
-      setNewProf({ name: '', salonName: '', category: '', city: '', username: '', password: '', expireDays: -1 });
+      setNewProf({ name: '', salonName: '', category: '', city: '', username: '', password: '', resetWord: '', expireDays: -1 });
       onRefresh();
     } catch (err: any) {
       alert('Erro no cadastro: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este profissional?')) return;
+    try {
+      const { error } = await supabase.from('professionals').delete().eq('id', id);
+      if (error) throw error;
+      onRefresh();
+    } catch (err: any) {
+      alert('Erro ao excluir: ' + err.message);
     }
   };
 
@@ -117,9 +133,10 @@ const DeveloperPanel: React.FC<{
         </div>
         <button onClick={() => setAuthed(false)} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold hover:bg-red-100 transition-colors">Sair</button>
       </div>
+      
       <div className="grid lg:grid-cols-2 gap-8 items-start">
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-          <h3 className="text-xl font-bold text-slate-900">Novo Profissional (Auth + DB)</h3>
+          <h3 className="text-xl font-bold text-slate-900">Novo Profissional</h3>
           <div className="space-y-6">
             <div className="space-y-4">
               <input placeholder="Nome Completo" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={newProf.name} onChange={(e) => setNewProf({...newProf, name: e.target.value})} />
@@ -136,17 +153,49 @@ const DeveloperPanel: React.FC<{
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <input type="password" placeholder="Senha temporária" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.password} onChange={(e) => setNewProf({...newProf, password: e.target.value})} />
-                <input type="number" placeholder="Dias expirar (-1 ilim)" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.expireDays} onChange={(e) => setNewProf({...newProf, expireDays: parseInt(e.target.value) || 0})} />
+                <input placeholder="Palavra reset" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.resetWord} onChange={(e) => setNewProf({...newProf, resetWord: e.target.value})} />
               </div>
+              <input type="number" placeholder="Dias expirar (-1 ilim)" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.expireDays} onChange={(e) => setNewProf({...newProf, expireDays: parseInt(e.target.value) || 0})} />
             </div>
             <button disabled={loading} onClick={handleRegister} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg disabled:opacity-50 transition-all">
               {loading ? 'Cadastrando...' : 'Confirmar Registro'}
             </button>
           </div>
+
+          <div className="pt-8 border-t border-slate-100">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Profissionais Cadastrados</h3>
+            <div className="space-y-3">
+              {professionals.map(p => (
+                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover" />
+                    <div>
+                      <p className="font-bold text-sm text-slate-900">{p.name}</p>
+                      <p className="text-[10px] text-slate-500 uppercase">{p.category} • {p.city}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => alert('Editar: ' + p.name)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    </button>
+                    <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+
         <div className="space-y-4">
-          <h3 className="text-xl font-bold text-slate-900">Arquitetura de Pastas</h3>
-          <DirectoryTree />
+          <div className="flex items-center justify-between bg-slate-900 p-4 rounded-xl">
+            <h3 className="text-xl font-bold text-white">Arquitetura de Pastas</h3>
+            <button onClick={() => setShowTree(!showTree)} className="text-indigo-400 text-xs font-bold uppercase hover:underline">
+              {showTree ? 'Minimizar' : 'Expandir'}
+            </button>
+          </div>
+          {showTree && <DirectoryTree />}
         </div>
       </div>
     </div>
@@ -193,7 +242,12 @@ const App: React.FC = () => {
       const { data, error } = await supabase.from('professionals').select('*');
       if (error) throw error;
       if (data && data.length > 0) {
-        setProfessionals(data.map((p: any) => ({ ...p, salonName: p.salon_name, expireDays: p.expire_days })));
+        setProfessionals(data.map((p: any) => ({ 
+          ...p, 
+          salonName: p.salon_name, 
+          expireDays: p.expire_days,
+          gallery: p.gallery || []
+        })));
       } else {
         setProfessionals(DEFAULT_PROFESSIONALS);
       }
@@ -258,7 +312,6 @@ const App: React.FC = () => {
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
-    // Simula salvamento real
     await new Promise(res => setTimeout(res, 1000));
     setIsSaving(false);
     alert("salvo com sucesso");
@@ -266,7 +319,6 @@ const App: React.FC = () => {
 
   const handleSaveSchedule = async () => {
     setIsSaving(true);
-    // Simula salvamento real
     await new Promise(res => setTimeout(res, 1000));
     setIsSaving(false);
     alert("salvo com sucesso");
@@ -509,7 +561,6 @@ const App: React.FC = () => {
                             <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Serviço</label>
                               <input 
-                                /* Fix: Ensure the ref callback returns void to avoid TypeScript error */
                                 ref={el => { serviceRefs.current[s.id] = el; }}
                                 type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold" placeholder="Ex: Corte" 
                               />
@@ -558,21 +609,11 @@ const App: React.FC = () => {
                           )}
                         </div>
                       ))}
-                      
-                      {profileData.services.length === 0 && (
-                        <div className="p-12 border-2 border-dashed border-slate-200 rounded-[32px] text-center text-slate-400">
-                          Nenhum serviço cadastrado. Clique em "+ Adicionar Novo Serviço" para começar.
-                        </div>
-                      )}
                     </div>
                   </div>
 
                   <div className="flex justify-end pt-6">
-                    <button 
-                      onClick={handleSaveProfile}
-                      disabled={isSaving}
-                      className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70"
-                    >
+                    <button onClick={handleSaveProfile} disabled={isSaving} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70">
                       {isSaving ? 'Salvando...' : 'Salvar Perfil'}
                     </button>
                   </div>
@@ -682,11 +723,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="pt-6 flex justify-end">
-                    <button 
-                      onClick={handleSaveSchedule}
-                      disabled={isSaving}
-                      className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100/50 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-70"
-                    >
+                    <button onClick={handleSaveSchedule} disabled={isSaving} className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100/50 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-70">
                       {isSaving ? (
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       ) : (
@@ -706,17 +743,8 @@ const App: React.FC = () => {
                     <h2 className="text-2xl font-black text-slate-900 mb-2">Galeria de Fotos</h2>
                     <p className="text-slate-500 text-sm">Faça upload de fotos dos seus trabalhos para exibir no seu perfil.</p>
                   </div>
-                  <input 
-                    type="file" 
-                    ref={galleryInputRef} 
-                    className="hidden" 
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, false)}
-                  />
-                  <button 
-                    onClick={() => galleryInputRef.current?.click()}
-                    className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
-                  >
+                  <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, false)} />
+                  <button onClick={() => galleryInputRef.current?.click()} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">
                     Fazer Upload
                   </button>
                 </div>
@@ -730,12 +758,7 @@ const App: React.FC = () => {
                     galleryImages.map((img, i) => (
                       <div key={i} className="aspect-square rounded-3xl overflow-hidden border border-slate-200 shadow-sm group relative animate-in zoom-in duration-300">
                         <img src={img} alt={`Trabalho ${i}`} className="w-full h-full object-cover" />
-                        <button 
-                          onClick={() => setGalleryImages(prev => prev.filter((_, idx) => idx !== i))}
-                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
-                        >
-                          ✕
-                        </button>
+                        <button onClick={() => setGalleryImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs">✕</button>
                       </div>
                     ))
                   )}
@@ -745,7 +768,7 @@ const App: React.FC = () => {
           </div>
         </div>
       );
-      case AppView.DEVELOPER_PANEL: return <DeveloperPanel onRefresh={fetchProfessionals} />;
+      case AppView.DEVELOPER_PANEL: return <DeveloperPanel professionals={professionals} onRefresh={fetchProfessionals} />;
       default: return null;
     }
   };
@@ -755,29 +778,60 @@ const App: React.FC = () => {
       {currentView()}
       {selectedProfessional && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[40px] w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
-            <div className="relative h-64">
+          <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
+            <button onClick={() => setSelectedProfessional(null)} className="absolute top-6 right-6 z-10 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
+            
+            <div className="relative h-80 overflow-hidden">
               <img src={selectedProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
-              <button onClick={() => setSelectedProfessional(null)} className="absolute top-6 right-6 bg-white/20 w-10 h-10 rounded-full text-white">✕</button>
-              <div className="absolute bottom-8 left-10 text-white">
-                <span className="bg-indigo-600 px-3 py-1 rounded-full text-xs font-bold mb-2 inline-block">{selectedProfessional.category}</span>
-                <h2 className="text-4xl font-black">{selectedProfessional.name}</h2>
-                {selectedProfessional.salonName && <p className="opacity-80">🏪 {selectedProfessional.salonName}</p>}
+              <div className="absolute top-10 left-10 p-6 bg-slate-900/60 backdrop-blur-md rounded-3xl border border-white/20 animate-in slide-in-from-top-4 duration-500">
+                <span className="bg-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase mb-2 inline-block text-white shadow-lg">{selectedProfessional.category}</span>
+                <h2 className="text-4xl font-black text-white leading-tight">{selectedProfessional.name}</h2>
+                {selectedProfessional.salonName && <p className="text-white/80 font-medium flex items-center gap-1 mt-1 text-sm">🏪 {selectedProfessional.salonName}</p>}
               </div>
             </div>
-            <div className="p-10 grid md:grid-cols-2 gap-10">
-              <div className="space-y-6">
-                <h4 className="text-lg font-bold">Sobre</h4>
-                <p className="text-slate-600">{selectedProfessional.bio}</p>
-                <h4 className="text-lg font-bold">Serviços</h4>
-                {selectedProfessional.services?.map(s => (
-                  <div key={s.id} className="p-4 border rounded-2xl flex justify-between">
-                    <span>{s.name} ({s.duration} min)</span>
-                    <span className="font-bold text-indigo-600">R$ {s.price}</span>
+
+            <div className="p-10">
+              <div className="grid lg:grid-cols-[1fr,400px] gap-12">
+                <div className="space-y-12">
+                  <div className="space-y-4">
+                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
+                    <p className="text-slate-600 leading-relaxed text-lg">{selectedProfessional.bio}</p>
                   </div>
-                ))}
+
+                  <div className="space-y-6">
+                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
+                    <div className="space-y-4">
+                      {selectedProfessional.services?.map(s => (
+                        <div key={s.id} className="p-6 bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-colors group">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{s.name}</span>
+                            <span className="text-slate-400 text-sm font-medium">⏳ {s.duration} min</span>
+                          </div>
+                          <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {selectedProfessional.gallery?.map((img, i) => (
+                        <div key={i} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                          <img src={img} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                      {(!selectedProfessional.gallery || selectedProfessional.gallery.length === 0) && (
+                        <p className="text-slate-400 italic col-span-full">Nenhuma foto disponível na galeria.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lg:sticky lg:top-10 h-fit">
+                  <AIAssistant context={selectedProfessional} />
+                </div>
               </div>
-              <AIAssistant context={selectedProfessional} />
             </div>
           </div>
         </div>

@@ -19,6 +19,8 @@ export interface Professional {
   imageUrl: string;
   rating: number;
   services: Service[];
+  gallery?: string[];
+  resetWord?: string;
   expireDays?: number;
   whatsapp?: string;
   address?: string;
