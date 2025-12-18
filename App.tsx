@@ -9,9 +9,10 @@ import { supabase } from './lib/supabase.ts';
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
+// Usando um UUID válido para evitar erro de sintaxe no Postgres/Supabase
 const DEFAULT_PROFESSIONALS: Professional[] = [
   {
-    id: '1', slug: 'marcos-barbeiro', name: 'Marcos Silva', salonName: 'Barbearia do Marcos', category: 'Beleza', city: 'São Paulo',
+    id: '00000000-0000-0000-0000-000000000001', slug: 'marcos-barbeiro', name: 'Marcos Silva', salonName: 'Barbearia do Marcos', category: 'Beleza', city: 'São Paulo',
     bio: 'Especialista em visagismo e barboterapia.', imageUrl: 'https://picsum.photos/seed/barber/400/300',
     rating: 4.9, services: [{ id: 's1', name: 'Corte de Cabelo', duration: 30, price: 50, preBooking: false }],
     gallery: ['https://picsum.photos/seed/1/400/300', 'https://picsum.photos/seed/2/400/300']
@@ -73,7 +74,6 @@ const DeveloperPanel: React.FC<{
     setLoading(true);
     try {
       if (editingId) {
-        // Lógica de update
         const { error } = await supabase.from('professionals').update({
           name: newProf.name,
           salon_name: newProf.salonName,
@@ -85,7 +85,6 @@ const DeveloperPanel: React.FC<{
         if (error) throw error;
         alert('Profissional atualizado!');
       } else {
-        // Lógica de insert
         const authEmail = `${cleanUsername}@marcai.dev`;
         const { error: authError } = await supabase.auth.signUp({
           email: authEmail,
@@ -101,7 +100,7 @@ const DeveloperPanel: React.FC<{
           city: newProf.city || 'Remoto',
           slug: newProf.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000),
           bio: 'Profissional cadastrado via painel administrativo.',
-          imageUrl: `https://picsum.photos/seed/${cleanUsername}/400/300`,
+          image_url: `https://picsum.photos/seed/${cleanUsername}/400/300`, // Corrigido para image_url
           rating: 5.0,
           expire_days: newProf.expireDays,
           reset_word: newProf.resetWord,
@@ -130,7 +129,7 @@ const DeveloperPanel: React.FC<{
       salonName: p.salonName || '',
       category: p.category,
       city: p.city,
-      username: p.slug, // apenas ilustrativo
+      username: p.slug,
       password: '',
       resetWord: p.resetWord || '',
       expireDays: p.expireDays || -1
@@ -140,6 +139,13 @@ const DeveloperPanel: React.FC<{
 
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja realmente excluir este profissional?')) return;
+    
+    // Evita tentar excluir o ID "1" mockado do Supabase se ele não existir
+    if (id.length < 10) {
+      alert("Este é um profissional de demonstração e não pode ser excluído do banco de dados real.");
+      return;
+    }
+
     try {
       const { error } = await supabase.from('professionals').delete().eq('id', id);
       if (error) throw error;
@@ -250,7 +256,6 @@ const App: React.FC = () => {
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const serviceRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // States for Profile configuration
   const [profileData, setProfileData] = useState({
     bio: '',
     whatsapp: '',
@@ -260,7 +265,6 @@ const App: React.FC = () => {
     photo: 'https://picsum.photos/seed/marcos/100'
   });
 
-  // States for Schedule configuration
   const [daySchedules, setDaySchedules] = useState(
     DAYS_OF_WEEK.map(day => ({ day, active: true, open: '09:00', close: '18:00' }))
   );
@@ -280,6 +284,7 @@ const App: React.FC = () => {
           salonName: p.salon_name, 
           expireDays: p.expire_days,
           resetWord: p.reset_word,
+          imageUrl: p.image_url, // Mapeado corretamente para o frontend
           gallery: p.gallery || []
         })));
       } else {
@@ -815,7 +820,6 @@ const App: React.FC = () => {
           <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
             <button onClick={() => { setSelectedProfessional(null); setSelectedService(null); }} className="absolute top-6 right-6 z-50 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
             
-            {/* Header com as informações do profissional movidas para o topo */}
             <div className="relative h-80 overflow-hidden">
               <img src={selectedProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent"></div>
@@ -827,7 +831,6 @@ const App: React.FC = () => {
             </div>
 
             <div className="p-10">
-              {/* Fluxo de Agendamento: Ao clicar no serviço, mostra calendário (mockado) */}
               {selectedService ? (
                 <div className="animate-in slide-in-from-right-4 duration-500 space-y-8">
                   <div className="flex items-center gap-4">
@@ -876,13 +879,11 @@ const App: React.FC = () => {
               ) : (
                 <div className="grid lg:grid-cols-[1fr,400px] gap-12 animate-in fade-in duration-500">
                   <div className="space-y-12">
-                    {/* Seção Sobre */}
                     <div className="space-y-4">
                       <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
                       <p className="text-slate-600 leading-relaxed text-lg">{selectedProfessional.bio}</p>
                     </div>
 
-                    {/* Seção Serviços: Clicar leva para agendamento */}
                     <div className="space-y-6">
                       <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
                       <div className="space-y-4">
@@ -905,7 +906,6 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Seção Galeria: Fotos que o profissional fez upload */}
                     <div className="space-y-6">
                       <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -923,7 +923,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Assistente Lateral */}
                   <div className="lg:sticky lg:top-10 h-fit">
                     <AIAssistant context={selectedProfessional} />
                   </div>
