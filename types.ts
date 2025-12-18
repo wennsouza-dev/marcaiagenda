@@ -31,10 +31,13 @@ export interface Appointment {
   id: string;
   professionalId: string;
   clientName: string;
+  clientPhone: string;
   serviceId: string;
+  serviceName: string;
   date: string;
   time: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'concluded';
+  isPreBooking?: boolean;
 }
 
 export enum AppView {
