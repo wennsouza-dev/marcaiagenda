@@ -18,7 +18,6 @@ const DeveloperPanel: React.FC<{
   const [pwd, setPwd] = useState('');
   const [authed, setAuthed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showTree, setShowTree] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newProf, setNewProf] = useState({ 
     name: '', 
@@ -269,12 +268,21 @@ const App: React.FC = () => {
       if (error) throw error;
       if (data && data.length > 0) {
         setProfessionals(data.map((p: any) => ({ 
-          ...p, 
-          salonName: p.salon_name, 
-          expireDays: p.expire_days,
-          resetWord: p.reset_word,
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          salonName: p.salon_name,
+          category: p.category,
+          city: p.city,
+          bio: p.bio || '',
           imageUrl: p.image_url,
-          gallery: p.gallery || []
+          rating: p.rating || 5.0,
+          services: p.services || [],
+          gallery: p.gallery || [],
+          whatsapp: p.whatsapp || '',
+          address: p.address || '',
+          expireDays: p.expire_days,
+          resetWord: p.reset_word
         })));
       } else {
         setProfessionals(DEFAULT_PROFESSIONALS);
@@ -344,7 +352,7 @@ const App: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!profileData.id) {
-        alert("Erro: ID do profissional não identificado. Tente logar novamente.");
+        alert("Erro ao salvar: ID do profissional não carregado. Faça login novamente.");
         return;
     }
 
@@ -363,8 +371,9 @@ const App: React.FC = () => {
       
       if (error) throw error;
       
+      // Sincronização imediata: re-fetch do marketplace e preview
       await fetchProfessionals();
-      alert("Alterações salvas com sucesso!");
+      alert("Perfil e Serviços sincronizados com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar perfil: " + err.message);
     } finally {
@@ -450,7 +459,6 @@ const App: React.FC = () => {
       
       setGalleryImages(prof.gallery || []);
       
-      // Carregar agendamentos mockados para demonstração
       setAppointments([
         {
           id: '1',
@@ -508,7 +516,7 @@ const App: React.FC = () => {
               </button>
               <button onClick={() => setView(AppView.PROFESSIONAL_LOGIN)} className="p-10 bg-white border-2 border-slate-100 rounded-[32px] hover:border-indigo-600 hover:-translate-y-2 transition-all">
                 <div className="w-16 h-16 mx-auto mb-4 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900">Área do Profissional</h3>
                 <p className="text-slate-500 text-sm mt-2">gerencie sua agenda e serviços</p>
@@ -572,7 +580,6 @@ const App: React.FC = () => {
           <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm min-h-[400px]">
             {dashboardTab === 'agendamentos' && (
               <div className="animate-in fade-in slide-in-from-bottom-2 space-y-12">
-                {/* Ganhos do Dia */}
                 <div className="bg-[#0f172a] p-8 rounded-[32px] text-white relative overflow-hidden shadow-2xl">
                     <div className="relative z-10">
                         <p className="text-slate-400 text-sm font-medium mb-1">Ganhos do dia (Concluídos)</p>
@@ -582,7 +589,6 @@ const App: React.FC = () => {
                             Ganhos por Período
                         </button>
                     </div>
-                    {/* Background SVG Simulation */}
                     <div className="absolute right-[-20px] bottom-[-20px] opacity-10">
                         <svg className="w-64 h-64" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
                     </div>
@@ -597,7 +603,6 @@ const App: React.FC = () => {
                     <div className="grid gap-8">
                         {appointments.map(app => (
                             <div key={app.id} className={`p-8 bg-white border ${app.status === 'pending' ? 'border-amber-200 shadow-amber-50 shadow-lg' : 'border-slate-100 shadow-sm'} rounded-[32px] space-y-6 relative group transition-all hover:shadow-md`}>
-                                {/* Header Card */}
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <h4 className="text-2xl font-black text-slate-900 leading-none mb-2">{app.clientName}</h4>
@@ -613,7 +618,6 @@ const App: React.FC = () => {
                                     </span>
                                 </div>
 
-                                {/* Info Bar */}
                                 <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-6 text-slate-500 text-sm font-medium">
                                     <div className="flex items-center gap-2">
                                         <svg className="w-5 h-5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -629,7 +633,6 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Banner Pré-agendamento */}
                                 {app.isPreBooking && (
                                     <div className="bg-amber-50/50 border border-amber-100 p-5 rounded-2xl flex gap-4">
                                         <div className="flex-shrink-0 text-amber-600">
@@ -646,7 +649,6 @@ const App: React.FC = () => {
                                     </div>
                                 )}
 
-                                {/* Ações do Card */}
                                 <div className="space-y-3">
                                     {app.isPreBooking && app.status === 'pending' && (
                                         <>
@@ -676,7 +678,6 @@ const App: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Próximos Agendamentos */}
                 <div className="space-y-6 pt-10">
                     <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-slate-300 rounded-full"></div>
@@ -690,7 +691,7 @@ const App: React.FC = () => {
             )}
             
             {dashboardTab === 'perfil' && (
-              <div className="animate-in fade-in slide-in-from-bottom-2 space-y-8">
+              <div className="animate-in fade-in slide-in-from-bottom-2 space-y-8 relative pb-20">
                 <h2 className="text-2xl font-black text-slate-900">Perfil e Serviços</h2>
                 
                 <div className="space-y-6">
@@ -699,17 +700,17 @@ const App: React.FC = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-slate-700">Descrição do Perfil</label>
                         <textarea 
-                          className="w-full p-4 border rounded-2xl min-h-[140px] bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
+                          className="w-full p-4 border border-slate-200 rounded-2xl min-h-[140px] bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
                           placeholder="Fale um pouco sobre você..."
                           value={profileData.bio}
                           onChange={(e) => setProfileData({...profileData, bio: e.target.value})}
                         ></textarea>
                       </div>
 
-                      <div className="space-y-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                      <div className="space-y-4 p-6 bg-slate-50 rounded-3xl border border-slate-200">
                         <h4 className="text-sm font-bold text-slate-700">Adicionar foto do perfil via upload do dispositivo</h4>
                         <div className="flex items-center gap-4">
-                          <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                          <div className="w-20 h-20 rounded-2xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
                              <img src={profileData.photo} alt="Profile" className="w-full h-full object-cover" />
                           </div>
                           <input 
@@ -733,7 +734,7 @@ const App: React.FC = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-slate-700">Número whatsapp</label>
                         <input 
-                          type="tel" className="w-full p-4 border rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                          type="tel" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
                           placeholder="32988729033"
                           value={profileData.whatsapp}
                           onChange={(e) => setProfileData({...profileData, whatsapp: e.target.value})}
@@ -742,7 +743,7 @@ const App: React.FC = () => {
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-slate-700">Endereço (Google Maps)</label>
                         <input 
-                          type="text" className="w-full p-4 border rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                          type="text" className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
                           placeholder="Rua, Batista de Oliveira, 331, centro"
                           value={profileData.address}
                           onChange={(e) => setProfileData({...profileData, address: e.target.value})}
@@ -764,22 +765,22 @@ const App: React.FC = () => {
                     
                     <div className="space-y-4">
                       {profileData.services.map((s) => (
-                        <div key={s.id} className="p-6 bg-slate-50/50 border border-slate-200 rounded-[28px] grid gap-4 items-start shadow-sm relative animate-in fade-in slide-in-from-top-4">
+                        <div key={s.id} className="p-6 bg-slate-50 border border-slate-200 rounded-[28px] grid gap-4 items-start shadow-sm relative animate-in fade-in slide-in-from-top-4">
                           <div className="grid md:grid-cols-[1fr,120px,120px,180px,80px] gap-4 items-end">
                             <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Serviço</label>
                               <input 
                                 ref={el => { serviceRefs.current[s.id] = el; }}
-                                type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold" placeholder="Ex: Corte" 
+                                type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" placeholder="Ex: Atendimento Padrao" 
                               />
                             </div>
                             <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Valor (R$)</label>
-                              <input type="number" value={s.price} onChange={e => handleUpdateService(s.id, 'price', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold" />
+                              <input type="number" value={s.price} onChange={e => handleUpdateService(s.id, 'price', parseFloat(e.target.value) || 0)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
                             </div>
                             <div className="flex flex-col gap-1">
                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tempo (min)</label>
-                              <input type="number" value={s.duration} onChange={e => handleUpdateService(s.id, 'duration', e.target.value)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold" />
+                              <input type="number" value={s.duration} onChange={e => handleUpdateService(s.id, 'duration', parseInt(e.target.value) || 0)} className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
                             </div>
                             <div className="flex flex-col gap-2 justify-center h-full pb-1">
                               <div className="flex items-center gap-2">
@@ -807,8 +808,12 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-end pt-6">
-                    <button onClick={handleSaveProfile} disabled={isSaving} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70">
+                  <div className="absolute bottom-4 right-4">
+                    <button 
+                      onClick={handleSaveProfile} 
+                      disabled={isSaving} 
+                      className="bg-[#4338ca] text-white px-12 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70"
+                    >
                       {isSaving ? 'Salvando...' : 'Salvar Perfil'}
                     </button>
                   </div>
@@ -823,7 +828,6 @@ const App: React.FC = () => {
                     <h2 className="text-2xl font-black text-slate-900 mb-2">Horários de Atendimento</h2>
                     <p className="text-slate-500 text-sm mb-6">Gerencie sua grade de horários disponíveis.</p>
                   </div>
-                  
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-slate-700 ml-1">Funcionamento Semanal</h3>
                     <div className="space-y-2">
@@ -838,7 +842,6 @@ const App: React.FC = () => {
                             }}
                           />
                           <span className={`font-bold text-sm w-24 ${item.active ? 'text-slate-900' : 'text-slate-400'}`}>{item.day}</span>
-                          
                           <div className={`flex items-center gap-6 flex-1 transition-opacity ${item.active ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-bold text-slate-400 uppercase">ABERTURA:</span>
@@ -857,7 +860,6 @@ const App: React.FC = () => {
                       ))}
                     </div>
                   </div>
-
                   <div className="pt-6 flex justify-end">
                     <button onClick={handleSaveSchedule} disabled={isSaving} className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-70">
                       {isSaving ? 'Salvando...' : 'Salvar Horários'}
@@ -880,7 +882,6 @@ const App: React.FC = () => {
                     Fazer Upload
                   </button>
                 </div>
-
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
                   {galleryImages.length === 0 ? (
                     <div className="col-span-full p-20 border-2 border-dashed border-slate-200 rounded-[32px] text-center text-slate-400">
@@ -901,7 +902,6 @@ const App: React.FC = () => {
                     ))
                   )}
                 </div>
-
                 <div className="flex justify-end pt-6">
                   <button onClick={handleSaveProfile} disabled={isSaving} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70">
                     {isSaving ? 'Salvando...' : 'Salvar Alterações'}
@@ -926,7 +926,6 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
             <button onClick={() => { setSelectedProfessional(null); setSelectedService(null); setBookingStep('selection'); }} className="absolute top-6 right-6 z-50 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
-            
             <div className="relative h-80 overflow-hidden">
               <img src={modalProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent"></div>
@@ -939,105 +938,87 @@ const App: React.FC = () => {
 
             <div className="p-10">
               {bookingStep === 'selection' ? (
-                <>
-                  {selectedService ? (
-                    <div className="animate-in slide-in-from-right-4 duration-500 space-y-8">
-                      <div className="flex items-center gap-4">
-                        <button onClick={() => setSelectedService(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                          <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                        </button>
-                        <div>
-                          <h3 className="text-2xl font-black text-slate-900 tracking-tight">Agendar {selectedService.name}</h3>
-                          <p className="text-slate-500 font-medium">Horário de Brasília (BRT)</p>
-                        </div>
-                      </div>
-
-                      <div className="grid md:grid-cols-[1fr,350px] gap-8">
-                        <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 text-center space-y-6">
-                          <div className="flex justify-between items-center px-4">
-                            <button className="text-slate-400">❮</button>
-                            <span className="font-black text-xl text-slate-800">Junho 2024</span>
-                            <button className="text-slate-400">❯</button>
-                          </div>
-                          <div className="grid grid-cols-7 gap-2">
-                            {['D','S','T','Q','Q','S','S'].map(d => <div key={d} className="text-[10px] font-black text-slate-400 uppercase py-2">{d}</div>)}
-                            {Array.from({length: 30}).map((_, i) => (
-                              <button key={i} onClick={() => setSelectedDate((i+1).toString())} className={`h-12 w-full rounded-2xl flex items-center justify-center font-bold transition-all ${selectedDate === (i+1).toString() ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-700'}`}>
-                                {i + 1}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="space-y-6">
-                          <h4 className="font-black text-slate-900 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            Horários Disponíveis
-                          </h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            {['09:00','09:30','10:00','10:30','14:00','14:30','15:00','16:00'].map(t => (
-                              <button key={t} onClick={() => setSelectedTime(t)} className={`py-3 px-4 border rounded-xl font-bold transition-all ${selectedTime === t ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'border-slate-200 text-slate-600 hover:border-indigo-600 hover:text-indigo-600'}`}>
-                                {t}
-                              </button>
-                            ))}
-                          </div>
-                          <button onClick={() => setBookingStep('review')} disabled={!selectedTime} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 mt-4 active:scale-95 transition-all disabled:opacity-50">REVISAR E AGENDAR</button>
+                <div className="grid lg:grid-cols-[1fr,400px] gap-12 animate-in fade-in duration-500">
+                  <div className="space-y-12">
+                    <div className="space-y-6">
+                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Sobre</h4>
+                      <div className="space-y-4">
+                        <p className="text-slate-600 leading-relaxed text-lg">{modalProfessional.bio}</p>
+                        
+                        <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                           {modalProfessional.whatsapp && (
+                             <div className="p-4 bg-slate-50 rounded-2xl flex items-center gap-3 border border-slate-100">
+                               <span className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm">📱</span>
+                               <div className="flex flex-col">
+                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp</span>
+                                 <a href={`https://wa.me/${modalProfessional.whatsapp.replace(/\D/g, '')}`} target="_blank" className="text-indigo-600 font-bold hover:underline">
+                                   {modalProfessional.whatsapp}
+                                 </a>
+                               </div>
+                             </div>
+                           )}
+                           {modalProfessional.address && (
+                             <div className="p-4 bg-slate-50 rounded-2xl flex items-center gap-3 border border-slate-100">
+                               <span className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl shadow-sm">📍</span>
+                               <div className="flex flex-col">
+                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Endereço</span>
+                                 <a 
+                                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(modalProfessional.address)}`} 
+                                   target="_blank" 
+                                   className="text-indigo-600 font-bold hover:underline truncate max-w-[150px]"
+                                   title={modalProfessional.address}
+                                 >
+                                   {modalProfessional.address}
+                                 </a>
+                               </div>
+                             </div>
+                           )}
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="grid lg:grid-cols-[1fr,400px] gap-12 animate-in fade-in duration-500">
-                      <div className="space-y-12">
-                        <div className="space-y-4">
-                          <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
-                          <p className="text-slate-600 leading-relaxed text-lg">{modalProfessional.bio}</p>
-                        </div>
 
-                        <div className="space-y-6">
-                          <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
-                          <div className="space-y-4">
-                            {modalProfessional.services?.map(s => (
-                              <button 
-                                key={s.id} 
-                                onClick={() => setSelectedService(s)}
-                                className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-colors group text-left"
-                              >
-                                <div className="flex flex-col">
-                                  <span className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{s.name}</span>
-                                  <span className="text-slate-400 text-sm font-medium flex items-center gap-1 mt-1">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    {s.duration} min
-                                  </span>
-                                </div>
-                                <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="space-y-6">
-                          <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            {modalProfessional.gallery?.map((img, i) => (
-                              <div key={i} className="aspect-square rounded-[24px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-transform">
-                                <img src={img} className="w-full h-full object-cover" />
+                    <div className="space-y-6">
+                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Serviços Disponíveis</h4>
+                      <div className="space-y-4">
+                        {modalProfessional.services?.map(s => (
+                          <button 
+                            key={s.id} 
+                            onClick={() => setSelectedService(s)}
+                            className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-all group text-left hover:bg-white hover:shadow-lg"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{s.name}</span>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-slate-400 text-sm font-medium flex items-center gap-1">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                  {s.duration} min
+                                </span>
+                                {s.preBooking && (
+                                  <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">Pré-agendamento</span>
+                                )}
                               </div>
-                            ))}
-                            {(!modalProfessional.gallery || modalProfessional.gallery.length === 0) && (
-                              <div className="col-span-full p-12 bg-slate-50 rounded-[32px] text-center text-slate-400 italic font-medium">
-                                Nenhuma foto disponível na galeria deste profissional.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="lg:sticky lg:top-10 h-fit">
-                        <AIAssistant context={modalProfessional} />
+                            </div>
+                            <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  )}
-                </>
+
+                    <div className="space-y-6">
+                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Galeria de fotos</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {modalProfessional.gallery?.map((img, i) => (
+                          <div key={i} className="aspect-square rounded-[24px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-transform">
+                            <img src={img} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="lg:sticky lg:top-10 h-fit">
+                    <AIAssistant context={modalProfessional} />
+                  </div>
+                </div>
               ) : (
                 <div className="max-w-2xl mx-auto space-y-12 animate-in fade-in zoom-in duration-500">
                   <div className="flex items-center gap-4">
@@ -1049,7 +1030,6 @@ const App: React.FC = () => {
                       <p className="text-slate-500 font-medium">Complete seus dados para confirmar o horário.</p>
                     </div>
                   </div>
-
                   <div className="bg-slate-50 p-10 rounded-[40px] border border-slate-100 space-y-8">
                     <div className="space-y-6">
                       <div className="space-y-2">
@@ -1073,7 +1053,6 @@ const App: React.FC = () => {
                         />
                       </div>
                     </div>
-
                     <div className="p-6 bg-white border border-slate-100 rounded-[28px] shadow-sm flex items-center gap-4">
                       <input 
                         type="checkbox" 
@@ -1086,7 +1065,6 @@ const App: React.FC = () => {
                         Li e concordo com os termos de agendamento e políticas de cancelamento.
                       </label>
                     </div>
-
                     <button 
                       onClick={handleFinishBooking}
                       className="w-full py-5 bg-indigo-600 text-white rounded-[28px] font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98]"
