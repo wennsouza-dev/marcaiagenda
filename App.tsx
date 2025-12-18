@@ -19,6 +19,9 @@ const DeveloperPanel: React.FC<{
   const [authed, setAuthed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sqlQuery, setSqlQuery] = useState('');
+  const [sqlResult, setSqlResult] = useState<string | null>(null);
+  
   const [newProf, setNewProf] = useState({ 
     name: '', 
     salonName: '',
@@ -55,6 +58,22 @@ const DeveloperPanel: React.FC<{
     );
   }
 
+  const handleExecuteSQL = async () => {
+    setLoading(true);
+    setSqlResult(null);
+    try {
+      // Nota: exec_sql RPC deve estar habilitado no seu Supabase
+      const { data, error } = await supabase.rpc('exec_sql', { query: sqlQuery });
+      if (error) throw error;
+      setSqlResult(JSON.stringify(data, null, 2) || 'Sucesso: Query executada.');
+      onRefresh();
+    } catch (err: any) {
+      setSqlResult('Erro SQL: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRegister = async () => {
     const cleanUsername = newProf.username.trim().toLowerCase().replace(/\s+/g, '');
     if (!newProf.name || !cleanUsername || (!editingId && !newProf.password)) {
@@ -74,7 +93,6 @@ const DeveloperPanel: React.FC<{
           reset_word: newProf.resetWord,
         }).eq('id', editingId);
         if (error) throw error;
-        alert('Profissional atualizado!');
       } else {
         const authEmail = `${cleanUsername}@marcai.dev`;
         const { error: authError } = await supabase.auth.signUp({
@@ -89,23 +107,23 @@ const DeveloperPanel: React.FC<{
           salon_name: newProf.salonName,
           category: newProf.category || 'Geral',
           city: newProf.city || 'Remoto',
-          slug: newProf.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000),
-          bio: 'Profissional cadastrado via painel administrativo.',
-          image_url: `https://picsum.photos/seed/${cleanUsername}/400/300`,
+          slug: cleanUsername,
+          bio: '', // Deixa em branco para preenchimento manual
+          image_url: 'https://picsum.photos/seed/default/400/300',
           rating: 5.0,
           expire_days: newProf.expireDays,
           reset_word: newProf.resetWord,
-          services: [{ id: 'sx', name: 'Atendimento Padrão', duration: 45, price: 100 }]
+          services: [] // Deixa em branco para preenchimento manual
         };
 
         const { error: dbError } = await supabase.from('professionals').insert([professionalData]);
         if (dbError) throw dbError;
-        alert(`Profissional cadastrado!\nAcesso: ${authEmail}`);
       }
       
       setNewProf({ name: '', salonName: '', category: '', city: '', username: '', password: '', resetWord: '', expireDays: -1 });
       setEditingId(null);
       onRefresh();
+      alert('Operação realizada com sucesso!');
     } catch (err: any) {
       alert('Erro: ' + err.message);
     } finally {
@@ -130,7 +148,6 @@ const DeveloperPanel: React.FC<{
 
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja realmente excluir este profissional?')) return;
-    
     try {
       const { error } = await supabase.from('professionals').delete().eq('id', id);
       if (error) throw error;
@@ -145,78 +162,79 @@ const DeveloperPanel: React.FC<{
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h2 className="text-3xl font-black text-slate-900">🛠️ Painel Administrativo</h2>
-          <p className="text-slate-500">Gestão de Profissionais (Supabase Ativo)</p>
+          <p className="text-slate-500">Gestão de Arquitetura e SQL</p>
         </div>
         <button onClick={() => setAuthed(false)} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold hover:bg-red-100 transition-colors">Sair</button>
       </div>
       
       <div className="grid lg:grid-cols-2 gap-8 items-start">
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-          <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Editar Profissional' : 'Novo Profissional'}</h3>
-          <div className="space-y-6">
+        <div className="space-y-8">
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+            <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Editar Profissional' : 'Novo Profissional'}</h3>
             <div className="space-y-4">
               <input placeholder="Nome Completo" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={newProf.name} onChange={(e) => setNewProf({...newProf, name: e.target.value})} />
               <div className="grid grid-cols-3 gap-3">
                 <input placeholder="Categoria" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.category} onChange={(e) => setNewProf({...newProf, category: e.target.value})} />
-                <input placeholder="Nome do Salão" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.salonName} onChange={(e) => setNewProf({...newProf, salonName: e.target.value})} />
+                <input placeholder="Salão" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.salonName} onChange={(e) => setNewProf({...newProf, salonName: e.target.value})} />
                 <input placeholder="Cidade" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.city} onChange={(e) => setNewProf({...newProf, city: e.target.value})} />
               </div>
+              <button disabled={loading} onClick={handleRegister} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg transition-all">
+                {loading ? 'Processando...' : 'Confirmar Registro'}
+              </button>
             </div>
-            <div className="space-y-4">
-              {!editingId && (
-                <div className="relative">
-                  <input type="text" placeholder="usuario (ex: joao123)" className="w-full pl-4 pr-32 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={newProf.username} onChange={(e) => setNewProf({...newProf, username: e.target.value})} />
-                  <div className="absolute right-4 top-3.5 text-slate-400 text-sm font-medium">@marcai.dev</div>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                {!editingId && <input type="password" placeholder="Senha temporária" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.password} onChange={(e) => setNewProf({...newProf, password: e.target.value})} />}
-                <input placeholder="Palavra reset" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.resetWord} onChange={(e) => setNewProf({...newProf, resetWord: e.target.value})} />
-              </div>
-              <input type="number" placeholder="- 1" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.expireDays} onChange={(e) => setNewProf({...newProf, expireDays: parseInt(e.target.value) || 0})} />
-            </div>
-            <button disabled={loading} onClick={handleRegister} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg disabled:opacity-50 transition-all">
-              {loading ? 'Salvando...' : 'Confirmar Registro'}
-            </button>
           </div>
 
-          <div className="pt-8 border-t border-slate-100">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Profissionais Cadastrados</h3>
-            <div className="space-y-3">
-              {professionals.length === 0 ? (
-                <p className="text-slate-400 italic text-sm text-center py-4">Nenhum profissional cadastrado.</p>
-              ) : (
-                professionals.map(p => (
-                  <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-200 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover border border-white shadow-sm" />
-                      <div>
-                        <p className="font-bold text-sm text-slate-900">{p.name}</p>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">{p.category} • {p.city}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleEdit(p)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors" title="Editar">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                      </button>
-                      <button onClick={() => handleDelete(p.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="Excluir">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                    </div>
-                  </div>
-                ))
+          <div className="bg-slate-900 p-8 rounded-3xl text-white space-y-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-indigo-400">🚀 Gerador de SQL (Supabase)</h3>
+            <div className="space-y-4">
+              <textarea 
+                placeholder="Ex: UPDATE professionals SET services = '[]' WHERE id = '...';" 
+                className="w-full h-32 bg-slate-800 border border-slate-700 rounded-xl p-4 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                value={sqlQuery}
+                onChange={(e) => setSqlQuery(e.target.value)}
+              ></textarea>
+              <button 
+                onClick={handleExecuteSQL}
+                disabled={loading || !sqlQuery}
+                className="w-full py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-700 transition-all active:scale-95"
+              >
+                Executar Query SQL
+              </button>
+              {sqlResult && (
+                <pre className="p-4 bg-black/40 rounded-xl text-[10px] overflow-auto max-h-40 border border-slate-700 text-emerald-400">
+                  {sqlResult}
+                </pre>
               )}
             </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-slate-900 p-4 rounded-xl flex items-center justify-between">
-            <h3 className="text-xl font-bold text-white">Arquitetura de Pastas</h3>
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <h3 className="text-xl font-bold text-slate-900 mb-4">Lista de Profissionais</h3>
+            <div className="space-y-3">
+              {professionals.map(p => (
+                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover" />
+                    <div>
+                      <p className="font-bold text-sm text-slate-900">{p.name}</p>
+                      <p className="text-[10px] text-slate-500 uppercase">{p.category} • {p.city}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleEdit(p)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    </button>
+                    <button onClick={() => handleDelete(p.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="animate-in slide-in-from-top-4 duration-300">
-            <DirectoryTree />
-          </div>
+          <DirectoryTree />
         </div>
       </div>
     </div>
@@ -227,22 +245,18 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.LANDING);
   const [dashboardTab, setDashboardTab] = useState<'agendamentos' | 'perfil' | 'horarios' | 'galeria'>('agendamentos');
   const [professionals, setProfessionals] = useState<Professional[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>('18');
-  const [selectedTime, setSelectedTime] = useState<string>('');
   const [bookingStep, setBookingStep] = useState<'selection' | 'review'>('selection');
   const [clientData, setClientData] = useState({ name: '', whatsapp: '', terms: false });
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const serviceRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [profileData, setProfileData] = useState({
     id: '',
@@ -254,12 +268,6 @@ const App: React.FC = () => {
     services: [] as Service[],
     photo: 'https://picsum.photos/seed/marcos/100'
   });
-
-  const [daySchedules, setDaySchedules] = useState(
-    DAYS_OF_WEEK.map(day => ({ day, active: true, open: '09:00', close: '18:00' }))
-  );
-  
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
 
   const fetchProfessionals = async () => {
     try {
@@ -283,11 +291,9 @@ const App: React.FC = () => {
           expireDays: p.expire_days,
           resetWord: p.reset_word
         })));
-      } else {
-        setProfessionals(DEFAULT_PROFESSIONALS);
       }
     } catch (err) {
-      setProfessionals(DEFAULT_PROFESSIONALS);
+      console.error(err);
     }
   };
 
@@ -309,13 +315,8 @@ const App: React.FC = () => {
     });
   }, [searchTerm, cityFilter, categoryFilter, professionals]);
 
-  const cities = Array.from(new Set(professionals.map(p => p.city)));
-  const categories = Array.from(new Set(professionals.map(p => p.category)));
-
   const handleNavigate = (newView: AppView) => {
-    if (newView === AppView.LANDING) {
-      setIsLoggedIn(false);
-    }
+    if (newView === AppView.LANDING) setIsLoggedIn(false);
     setView(newView);
   };
 
@@ -325,8 +326,7 @@ const App: React.FC = () => {
       name: '',
       duration: 30,
       price: 0,
-      preBooking: false,
-      preBookingRules: ''
+      preBooking: false
     };
     setProfileData(prev => ({ ...prev, services: [...prev.services, newService] }));
   };
@@ -345,16 +345,8 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleEditService = (id: string) => {
-    serviceRefs.current[id]?.focus();
-  };
-
   const handleSaveProfile = async () => {
-    if (!profileData.id) {
-        alert("Erro ao salvar: Sessão de profissional não identificada.");
-        return;
-    }
-
+    if (!profileData.id) return;
     setIsSaving(true);
     try {
       const { error } = await supabase.from('professionals')
@@ -367,37 +359,22 @@ const App: React.FC = () => {
           gallery: galleryImages
         })
         .eq('id', profileData.id);
-      
       if (error) throw error;
-      
-      // Sincronização definitiva com o marketplace
       await fetchProfessionals();
-      alert("Sucesso absoluto! Seus dados foram salvos e o perfil público atualizado.");
+      alert("Perfil e Serviços atualizados com sucesso!");
     } catch (err: any) {
-      alert("Falha ao persistir dados: " + err.message);
+      alert("Falha ao salvar: " + err.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSaveSchedule = async () => {
-    setIsSaving(true);
-    await new Promise(res => setTimeout(res, 800));
-    setIsSaving(false);
-    alert("Grade de horários atualizada com sucesso.");
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isProfile: boolean = false) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result as string;
-        if (isProfile) {
-          setProfileData(prev => ({ ...prev, photo: base64 }));
-        } else {
-          setGalleryImages(prev => [base64, ...prev]);
-        }
+      reader.onloadend = () => {
+        setProfileData(prev => ({ ...prev, photo: reader.result as string }));
       };
       reader.readAsDataURL(file);
     }
@@ -405,60 +382,35 @@ const App: React.FC = () => {
 
   const handleFinishBooking = () => {
     if (!clientData.name || !clientData.whatsapp || !clientData.terms) {
-      alert("Preencha todos os campos e aceite os termos.");
+      alert("Preencha todos os campos.");
       return;
     }
-
     const targetProf = activeProfessionalInModal;
-    const message = `Olá ${targetProf?.name}, agendamento MarcAI:\n` +
-                    `📌 ${selectedService?.name}\n` +
-                    `📅 ${selectedDate}/06 às ${selectedTime}\n` +
-                    `👤 Cliente: ${clientData.name}\n` +
-                    `📱 WhatsApp: ${clientData.whatsapp}`;
-    
-    const whatsappLink = `https://wa.me/${targetProf?.whatsapp?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappLink, '_blank');
-    
+    const msg = `Olá ${targetProf?.name}, novo agendamento MarcAI:\n📍 ${selectedService?.name}\n👤 ${clientData.name}\n📱 ${clientData.whatsapp}`;
+    const link = `https://wa.me/${targetProf?.whatsapp?.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+    window.open(link, '_blank');
     setSelectedProfessional(null);
-    setBookingStep('selection');
   };
 
   const handleProfessionalLogin = async (userData: any) => {
     try {
-      let { data, error } = await supabase.from('professionals')
-        .select('*')
-        .eq('slug', userData.slug)
-        .limit(1);
-      
-      if (!data || data.length === 0) {
-        const { data: allProfs } = await supabase.from('professionals').select('*').limit(1);
-        data = allProfs;
-      }
-
-      if (!data || data.length === 0) throw new Error("Nenhum profissional localizado.");
-
-      const prof = data[0];
+      const { data } = await supabase.from('professionals').select('*').eq('slug', userData.slug).single();
+      if (!data) throw new Error("Acesso não encontrado.");
       setProfileData({
-        id: prof.id,
-        name: prof.name,
-        bio: prof.bio || '',
-        whatsapp: prof.whatsapp || '',
-        address: prof.address || '',
-        customLink: prof.slug,
-        services: prof.services || [],
-        photo: prof.image_url || 'https://picsum.photos/seed/marcos/100'
+        id: data.id,
+        name: data.name,
+        bio: data.bio || '',
+        whatsapp: data.whatsapp || '',
+        address: data.address || '',
+        customLink: data.slug,
+        services: data.services || [],
+        photo: data.image_url || 'https://picsum.photos/seed/marcos/100'
       });
-      setGalleryImages(prof.gallery || []);
-      
-      setAppointments([
-        { id: '1', professionalId: prof.id, clientName: 'Ana Silva', clientPhone: '11999999999', serviceId: 's1', serviceName: 'Corte de Cabelo', date: '17/12', time: '14:00', status: 'confirmed' },
-        { id: '2', professionalId: prof.id, clientName: 'Carlos Souza', clientPhone: '11988888888', serviceId: 's2', serviceName: 'Barba', date: '17/12', time: '15:30', status: 'pending', isPreBooking: true }
-      ]);
-
+      setGalleryImages(data.gallery || []);
       setIsLoggedIn(true);
       setView(AppView.PROFESSIONAL_DASHBOARD);
     } catch (err: any) {
-      alert("Falha no login: " + err.message);
+      alert(err.message);
     }
   };
 
@@ -467,30 +419,25 @@ const App: React.FC = () => {
   return (
     <Layout activeView={view} onNavigate={handleNavigate} isLoggedIn={isLoggedIn}>
       {view === AppView.LANDING && (
-        <div className="relative min-h-[80vh] flex flex-col items-center justify-center px-4 overflow-hidden bg-slate-50">
-          <div className="max-w-5xl text-center space-y-12 animate-in fade-in zoom-in duration-700">
-            <div className="space-y-4">
-              <h2 className="text-5xl md:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight">
-                Agendamentos que <span className="text-indigo-600">aprendem</span> com você.
-              </h2>
-              <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium">
-                A plataforma inteligente que conecta clientes a profissionais de forma simples e direta.
-              </p>
-            </div>
+        <div className="relative min-h-[80vh] flex flex-col items-center justify-center px-4 bg-slate-50">
+          <div className="max-w-5xl text-center space-y-12 animate-in fade-in duration-700">
+            <h2 className="text-5xl md:text-7xl font-black text-slate-900 leading-tight">
+              Agendamentos que <span className="text-indigo-600">aprendem</span> com você.
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto w-full">
               <button onClick={() => setView(AppView.CLIENTS)} className="p-10 bg-white border-2 border-slate-100 rounded-[32px] hover:border-indigo-600 hover:-translate-y-2 transition-all">
                 <div className="w-16 h-16 mx-auto mb-4 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Sou cliente</h3>
-                <p className="text-slate-500 text-sm mt-2">agendar um novo serviço</p>
+                <h3 className="text-2xl font-bold text-slate-900">Sou cliente</h3>
+                <p className="text-slate-500 text-sm mt-2">agendar um serviço</p>
               </button>
               <button onClick={() => setView(AppView.PROFESSIONAL_LOGIN)} className="p-10 bg-white border-2 border-slate-100 rounded-[32px] hover:border-indigo-600 hover:-translate-y-2 transition-all">
                 <div className="w-16 h-16 mx-auto mb-4 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Área do Profissional</h3>
-                <p className="text-slate-500 text-sm mt-2">gerenciar minha grade</p>
+                <h3 className="text-2xl font-bold text-slate-900">Área Profissional</h3>
+                <p className="text-slate-500 text-sm mt-2">gerenciar minha agenda</p>
               </button>
             </div>
           </div>
@@ -499,20 +446,7 @@ const App: React.FC = () => {
 
       {view === AppView.CLIENTS && (
         <div className="max-w-7xl mx-auto py-12 px-4">
-          <h2 className="text-4xl font-black text-slate-900 mb-8 tracking-tight">Marketplace MarcAI</h2>
-          <div className="bg-white p-4 rounded-3xl shadow-sm mb-12 border border-slate-100 grid md:grid-cols-4 gap-4">
-            <div className="col-span-2 relative">
-              <input placeholder="Buscar profissional ou serviço..." className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-            </div>
-            <select className="px-5 py-4 bg-slate-50 border-none rounded-2xl outline-none" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
-              <option value="">Todas Cidades</option>
-              {cities.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select className="px-5 py-4 bg-slate-50 border-none rounded-2xl outline-none" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-              <option value="">Categorias</option>
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+          <h2 className="text-4xl font-black text-slate-900 mb-8">Marketplace MarcAI</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredProfessionals.map((prof) => (
               <ProfessionalCard key={prof.id} professional={prof} onSelect={(p) => setSelectedProfessional(p)} />
@@ -524,139 +458,95 @@ const App: React.FC = () => {
       {view === AppView.PROFESSIONAL_LOGIN && (
         <div className="min-h-[70vh] flex items-center justify-center px-4">
           <div className="bg-white p-10 rounded-[40px] shadow-2xl border border-slate-100 w-full max-w-md space-y-8">
-            <h2 className="text-3xl font-bold text-center tracking-tight">Login Profissional</h2>
+            <h2 className="text-3xl font-bold text-center">Login Profissional</h2>
             <div className="space-y-4">
-              <input placeholder="Usuário" className="w-full px-4 py-4 border rounded-2xl bg-slate-50 outline-none" />
-              <input type="password" placeholder="Senha" className="w-full px-4 py-4 border rounded-2xl bg-slate-50 outline-none" />
-              <button onClick={() => handleProfessionalLogin({slug: 'marcos-barbeiro'})} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all">ENTRAR NO PAINEL</button>
+              <input placeholder="Usuário (slug)" className="w-full px-4 py-4 border rounded-2xl bg-slate-50 outline-none" onChange={(e) => setProfileData(p => ({...p, customLink: e.target.value}))} />
+              <button onClick={() => handleProfessionalLogin({slug: profileData.customLink})} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black hover:bg-indigo-700 transition-all">ENTRAR NO PAINEL</button>
             </div>
           </div>
         </div>
       )}
 
       {view === AppView.PROFESSIONAL_DASHBOARD && (
-        <div className="max-w-7xl mx-auto py-12 px-4 animate-in fade-in">
+        <div className="max-w-7xl mx-auto py-12 px-4">
           <div className="flex justify-center mb-8">
-            <nav className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-2xl shadow-sm">
-              <button onClick={() => setDashboardTab('agendamentos')} className={`px-6 py-2.5 rounded-xl text-xs font-black tracking-widest ${dashboardTab === 'agendamentos' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>AGENDAMENTOS</button>
-              <button onClick={() => setDashboardTab('perfil')} className={`px-6 py-2.5 rounded-xl text-xs font-black tracking-widest ${dashboardTab === 'perfil' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>PERFIL & SERVIÇOS</button>
-              <button onClick={() => setDashboardTab('horarios')} className={`px-6 py-2.5 rounded-xl text-xs font-black tracking-widest ${dashboardTab === 'horarios' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>HORÁRIOS</button>
-              <button onClick={() => setDashboardTab('galeria')} className={`px-6 py-2.5 rounded-xl text-xs font-black tracking-widest ${dashboardTab === 'galeria' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>GALERIA</button>
+            <nav className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-2xl">
+              <button onClick={() => setDashboardTab('agendamentos')} className={`px-6 py-2.5 rounded-xl text-xs font-black ${dashboardTab === 'agendamentos' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>AGENDAMENTOS</button>
+              <button onClick={() => setDashboardTab('perfil')} className={`px-6 py-2.5 rounded-xl text-xs font-black ${dashboardTab === 'perfil' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>PERFIL & SERVIÇOS</button>
+              <button onClick={() => setDashboardTab('horarios')} className={`px-6 py-2.5 rounded-xl text-xs font-black ${dashboardTab === 'horarios' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>HORÁRIOS</button>
             </nav>
           </div>
 
           <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm min-h-[500px] relative">
-            {dashboardTab === 'agendamentos' && (
-              <div className="space-y-10 animate-in fade-in">
-                <div className="bg-[#0f172a] p-10 rounded-[40px] text-white relative overflow-hidden shadow-2xl">
-                    <div className="relative z-10">
-                        <p className="text-slate-400 text-sm font-medium mb-1">Ganhos do dia (Concluídos)</p>
-                        <h3 className="text-5xl font-black mb-6 tracking-tight">R$ 0.00</h3>
-                        <button className="bg-slate-800 text-slate-300 px-5 py-2.5 rounded-xl text-xs font-black hover:bg-slate-700 transition-colors">Ganhos por Período</button>
-                    </div>
-                    <div className="absolute right-[-20px] bottom-[-20px] opacity-10"><svg className="w-64 h-64" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg></div>
-                </div>
-
-                <div className="space-y-6">
-                    <div className="flex items-center gap-3"><div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div><h2 className="text-2xl font-black text-slate-900 tracking-tight">Agendamentos de Hoje</h2></div>
-                    <div className="grid gap-6">
-                        {appointments.map(app => (
-                            <div key={app.id} className={`p-8 bg-white border ${app.status === 'pending' ? 'border-amber-200' : 'border-slate-100'} rounded-[32px] space-y-6 relative shadow-sm`}>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h4 className="text-2xl font-black text-slate-900 mb-1 leading-none">{app.clientName}</h4>
-                                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm tracking-tight">{app.clientPhone}</div>
-                                    </div>
-                                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase ${app.status === 'confirmed' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                                        {app.status === 'confirmed' ? 'CONFIRMADO' : 'PENDENTE'}
-                                    </span>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-6 text-slate-500 text-sm font-medium">
-                                    <span>📅 {app.date} (Hoje)</span>
-                                    <span>⏰ {app.time}</span>
-                                    <span>✂️ {app.serviceName}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button className="py-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl font-bold">Concluir</button>
-                                    <button className="py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl font-bold">Cancelar</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-              </div>
-            )}
-            
             {dashboardTab === 'perfil' && (
-              <div className="animate-in fade-in space-y-8 pb-24">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Perfil e Serviços</h2>
+              <div className="space-y-8 pb-24">
+                <h2 className="text-2xl font-black text-slate-900">Perfil e Serviços</h2>
                 <div className="grid md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-slate-700">Descrição do Perfil</label>
-                      <textarea className="w-full p-4 border border-slate-200 rounded-2xl min-h-[140px] bg-slate-50 outline-none" placeholder="Conte sobre sua experiência..." value={profileData.bio} onChange={(e) => setProfileData({...profileData, bio: e.target.value})}></textarea>
+                      <label className="text-sm font-bold">Descrição do Perfil</label>
+                      <textarea className="w-full p-4 border border-slate-200 rounded-2xl min-h-[140px] bg-slate-50" value={profileData.bio} onChange={(e) => setProfileData({...profileData, bio: e.target.value})} />
                     </div>
-                    <div className="space-y-4 p-6 bg-slate-50 rounded-3xl border border-slate-200">
-                      <h4 className="text-sm font-bold text-slate-700">Adicionar foto do perfil via upload</h4>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold">Foto do Perfil</label>
                       <div className="flex items-center gap-4">
-                        <img src={profileData.photo} className="w-20 h-20 rounded-2xl object-cover bg-white shadow-sm border border-slate-100" />
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, true)} />
+                        <img src={profileData.photo} className="w-20 h-20 rounded-2xl object-cover bg-slate-100" />
+                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
                         <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100">Escolher arquivo</button>
                       </div>
                     </div>
                   </div>
                   <div className="space-y-6">
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-slate-700">Número whatsapp</label>
-                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="32988729033" value={profileData.whatsapp} onChange={(e) => setProfileData({...profileData, whatsapp: e.target.value})} />
+                      <label className="text-sm font-bold">WhatsApp de Atendimento</label>
+                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" value={profileData.whatsapp} onChange={(e) => setProfileData({...profileData, whatsapp: e.target.value})} />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-slate-700">Endereço (Google Maps)</label>
-                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="Ex: Rua Batista de Oliveira, 331" value={profileData.address} onChange={(e) => setProfileData({...profileData, address: e.target.value})} />
+                      <label className="text-sm font-bold">Endereço do Local</label>
+                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50" value={profileData.address} onChange={(e) => setProfileData({...profileData, address: e.target.value})} />
                     </div>
                   </div>
                 </div>
 
                 <div className="pt-10 border-t border-slate-100">
                   <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Serviços Oferecidos</h3>
-                    <button onClick={handleAddService} className="text-indigo-600 font-bold text-sm tracking-tight">+ Adicionar Novo Serviço</button>
+                    <h3 className="text-xl font-black">Meus Serviços</h3>
+                    <button onClick={handleAddService} className="text-indigo-600 font-bold text-sm">+ Adicionar Serviço</button>
                   </div>
                   <div className="space-y-4">
                     {profileData.services.map((s) => (
                       <div key={s.id} className="p-6 bg-slate-50 border border-slate-200 rounded-[28px] grid md:grid-cols-[1fr,100px,100px,180px,50px] gap-4 items-end animate-in fade-in">
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">SERVIÇO</span>
-                          <input type="text" value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
+                          <input value={s.name} onChange={e => handleUpdateService(s.id, 'name', e.target.value)} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
                         </div>
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">VALOR (R$)</span>
                           <input type="number" value={s.price} onChange={e => handleUpdateService(s.id, 'price', parseFloat(e.target.value))} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
                         </div>
                         <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">TEMPO (MIN)</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">MINUTOS</span>
                           <input type="number" value={s.duration} onChange={e => handleUpdateService(s.id, 'duration', parseInt(e.target.value))} className="w-full p-3.5 rounded-xl bg-white border border-slate-200 text-sm font-bold outline-none" />
                         </div>
                         <div className="flex items-center gap-2 h-full pb-3.5">
-                          <input type="checkbox" className="w-5 h-5 accent-indigo-600" checked={s.preBooking} onChange={e => handleUpdateService(s.id, 'preBooking', e.target.checked)} />
+                          <input type="checkbox" className="w-5 h-5 accent-indigo-600 rounded" checked={s.preBooking} onChange={e => handleUpdateService(s.id, 'preBooking', e.target.checked)} />
                           <span className="text-[11px] font-black text-slate-600 tracking-tight uppercase">Pré-agendamento</span>
                         </div>
-                        <button onClick={() => handleDeleteService(s.id)} className="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-red-600">✕</button>
+                        <button onClick={() => handleDeleteService(s.id)} className="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center hover:bg-red-600">✕</button>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="absolute bottom-6 right-8">
-                  <button onClick={handleSaveProfile} disabled={isSaving} className="bg-[#4338ca] text-white px-14 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-800 transition-all active:scale-95">
+                  <button onClick={handleSaveProfile} disabled={isSaving} className="bg-[#4338ca] text-white px-14 py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-800 transition-all disabled:opacity-50">
                     {isSaving ? 'SALVANDO...' : 'Salvar Perfil'}
                   </button>
                 </div>
               </div>
             )}
-            
+            {dashboardTab === 'agendamentos' && <div className="p-20 text-center text-slate-400 italic font-medium">Lista de agendamentos agendados hoje.</div>}
             {dashboardTab === 'horarios' && <div className="p-20 text-center text-slate-400 italic font-medium">Configurações de horários de atendimento.</div>}
-            {dashboardTab === 'galeria' && <div className="p-20 text-center text-slate-400 italic font-medium">Fotos do seu portfólio.</div>}
           </div>
         </div>
       )}
@@ -666,86 +556,70 @@ const App: React.FC = () => {
       {modalProfessional && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
-            <button onClick={() => { setSelectedProfessional(null); setBookingStep('selection'); }} className="absolute top-6 right-6 z-50 bg-slate-900/40 hover:bg-slate-900/60 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
+            <button onClick={() => setSelectedProfessional(null)} className="absolute top-6 right-6 z-50 bg-slate-900/40 hover:bg-slate-900/60 w-10 h-10 rounded-full text-white flex items-center justify-center">✕</button>
             <div className="relative h-80">
               <img src={modalProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-transparent to-transparent"></div>
+              
+              <div className="absolute -bottom-12 left-12 p-1.5 bg-white rounded-[32px] shadow-2xl border border-slate-100 z-10">
+                <img src={modalProfessional.imageUrl} className="w-32 h-32 rounded-[28px] object-cover" />
+              </div>
+
               <div className="absolute top-10 left-10 p-6 bg-slate-900/50 backdrop-blur-sm rounded-3xl border border-white/10">
-                <span className="bg-[#4338ca] text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full text-white mb-2 inline-block shadow-lg">
-                  {modalProfessional.category.toUpperCase()}
-                </span>
-                <h2 className="text-5xl font-black text-white leading-none tracking-tight">{modalProfessional.name}</h2>
-                <div className="flex items-center gap-2 mt-2 text-white/80 text-xs font-bold uppercase tracking-tight">
-                  🏪 {modalProfessional.salonName || 'Barbearia VIP'}
-                </div>
+                <span className="bg-[#4338ca] text-[9px] font-black uppercase px-3 py-1 rounded-full text-white mb-2 inline-block shadow-lg">{modalProfessional.category.toUpperCase()}</span>
+                <h2 className="text-5xl font-black text-white leading-none">{modalProfessional.name}</h2>
+                <div className="flex items-center gap-2 mt-2 text-white/80 text-xs font-bold uppercase tracking-tight">🏪 {modalProfessional.salonName || 'MarcAI Studio'}</div>
+              </div>
+
+              <div className="absolute top-10 right-20 flex flex-col gap-3">
+                {modalProfessional.whatsapp && (
+                  <a href={`https://wa.me/${modalProfessional.whatsapp.replace(/\D/g, '')}`} target="_blank" className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-white/50 shadow-xl hover:bg-white transition-all group min-w-[200px]">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">WhatsApp direto</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">📱</span>
+                      <span className="text-[#4338ca] font-black text-sm group-hover:underline">{modalProfessional.whatsapp}</span>
+                    </div>
+                  </a>
+                )}
+                {modalProfessional.address && (
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(modalProfessional.address)}`} target="_blank" className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-white/50 shadow-xl hover:bg-white transition-all group min-w-[200px]">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Endereço / Local</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">📍</span>
+                      <span className="text-slate-700 font-bold text-[10px] line-clamp-1 group-hover:underline">{modalProfessional.address}</span>
+                    </div>
+                  </a>
+                )}
               </div>
             </div>
 
-            <div className="p-10 space-y-12">
+            <div className="p-10 pt-20 space-y-12">
               <div className="grid lg:grid-cols-[1fr,400px] gap-12">
                 <div className="space-y-12">
                   <div className="space-y-6">
                     <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Sobre</h4>
-                    <div className="space-y-4">
-                      <p className="text-slate-600 leading-relaxed text-lg">{modalProfessional.bio}</p>
-                      <div className="grid sm:grid-cols-2 gap-4 pt-6 border-t border-slate-100">
-                         {modalProfessional.whatsapp && (
-                           <div className="flex flex-col bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">WhatsApp de Contato</span>
-                             <div className="flex items-center gap-2">
-                               <span className="text-indigo-600 font-black">📱</span>
-                               <a href={`https://wa.me/${modalProfessional.whatsapp.replace(/\D/g, '')}`} target="_blank" className="text-indigo-600 font-black text-lg hover:underline transition-all">
-                                 {modalProfessional.whatsapp}
-                               </a>
-                             </div>
-                           </div>
-                         )}
-                         {modalProfessional.address && (
-                           <div className="flex flex-col bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Localização</span>
-                             <div className="flex items-center gap-2">
-                               <span className="text-indigo-600 font-black">📍</span>
-                               <a 
-                                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(modalProfessional.address)}`} 
-                                 target="_blank" 
-                                 className="text-indigo-600 font-black text-sm hover:underline line-clamp-2 transition-all"
-                                 title={modalProfessional.address}
-                               >
-                                 {modalProfessional.address}
-                               </a>
-                             </div>
-                           </div>
-                         )}
-                      </div>
-                    </div>
+                    <p className="text-slate-600 leading-relaxed text-lg whitespace-pre-line">{modalProfessional.bio || 'Profissional parceiro MarcAI.'}</p>
                   </div>
 
                   <div className="space-y-6">
-                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Serviços Disponíveis</h4>
+                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Agendar Serviço</h4>
                     <div className="space-y-4">
-                      {modalProfessional.services?.map(s => (
-                        <button key={s.id} onClick={() => { setSelectedService(s); setBookingStep('selection'); setSelectedTime('09:00'); }} className="w-full p-7 bg-slate-50 border border-slate-200 rounded-[32px] flex items-center justify-between hover:bg-white hover:border-indigo-200 hover:shadow-xl transition-all group">
-                          <div className="flex flex-col">
-                            <span className="font-black text-slate-900 text-xl group-hover:text-indigo-600 transition-colors">{s.name}</span>
-                            <div className="flex items-center gap-3 mt-1">
-                               <span className="text-slate-400 text-xs font-bold">🕒 {s.duration} min</span>
-                               {s.preBooking && <span className="bg-amber-100 text-amber-700 text-[8px] font-black px-2 py-0.5 rounded-full tracking-widest uppercase">Pré-pagamento</span>}
+                      {modalProfessional.services.length === 0 ? (
+                        <p className="text-slate-400 italic p-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">Nenhum serviço disponível no momento.</p>
+                      ) : (
+                        modalProfessional.services.map(s => (
+                          <button key={s.id} onClick={() => { setSelectedService(s); setBookingStep('selection'); }} className="w-full p-7 bg-slate-50 border border-slate-200 rounded-[32px] flex items-center justify-between hover:bg-white hover:border-indigo-200 transition-all group shadow-sm hover:shadow-xl">
+                            <div className="flex flex-col text-left">
+                              <span className="font-black text-slate-900 text-xl group-hover:text-[#4338ca] transition-colors">{s.name}</span>
+                              <div className="flex items-center gap-3 mt-1">
+                                 <span className="text-slate-400 text-xs font-bold">🕒 {s.duration} min</span>
+                                 {s.preBooking && <span className="bg-amber-100 text-amber-700 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">Pré-agendamento</span>}
+                              </div>
                             </div>
-                          </div>
-                          <span className="font-black text-2xl text-indigo-600 tracking-tight">R$ {s.price}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-6 pt-4">
-                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4 tracking-tight">Galeria de fotos</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                      {modalProfessional.gallery?.map((img, i) => (
-                        <div key={i} className="aspect-square rounded-[32px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-all">
-                          <img src={img} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
+                            <span className="font-black text-2xl text-[#4338ca] tracking-tight">R$ {s.price}</span>
+                          </button>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -754,28 +628,22 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {selectedService && bookingStep === 'selection' && (
+              {selectedService && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
                   <div className="bg-white p-10 rounded-[40px] w-full max-w-md shadow-2xl space-y-8 animate-in zoom-in-95">
                     <div className="flex justify-between items-start">
                       <h3 className="text-3xl font-black tracking-tight leading-tight">Agendar {selectedService.name}</h3>
-                      <button onClick={() => setSelectedService(null)} className="text-slate-400 font-bold text-xl">✕</button>
+                      <button onClick={() => setSelectedService(null)} className="text-slate-400 font-bold text-xl hover:text-red-500 transition-colors">✕</button>
                     </div>
                     <div className="space-y-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Seu Nome</label>
-                        <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" value={clientData.name} onChange={e => setClientData({...clientData, name: e.target.value})} />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">WhatsApp</label>
-                        <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ex: 32988887777" value={clientData.whatsapp} onChange={e => setClientData({...clientData, whatsapp: e.target.value})} />
-                      </div>
+                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="Seu Nome Completo" value={clientData.name} onChange={e => setClientData({...clientData, name: e.target.value})} />
+                      <input className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 outline-none" placeholder="WhatsApp (DDD+Número)" value={clientData.whatsapp} onChange={e => setClientData({...clientData, whatsapp: e.target.value})} />
                       <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <input type="checkbox" className="w-6 h-6 accent-indigo-600 rounded cursor-pointer" checked={clientData.terms} onChange={e => setClientData({...clientData, terms: e.target.checked})} />
-                        <span className="text-[11px] font-bold text-slate-600 leading-tight">Estou ciente das políticas de cancelamento e comparecimento.</span>
+                        <input type="checkbox" className="w-6 h-6 accent-[#4338ca] rounded cursor-pointer" checked={clientData.terms} onChange={e => setClientData({...clientData, terms: e.target.checked})} />
+                        <span className="text-[11px] font-bold text-slate-600 leading-tight">Estou ciente das políticas de agendamento do MarcAI.</span>
                       </div>
                     </div>
-                    <button onClick={handleFinishBooking} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95">CONCLUIR AGENDAMENTO</button>
+                    <button onClick={handleFinishBooking} className="w-full py-5 bg-[#4338ca] text-white rounded-2xl font-black shadow-xl hover:bg-indigo-800 transition-all active:scale-95">CONCLUIR AGENDAMENTO</button>
                   </div>
                 </div>
               )}

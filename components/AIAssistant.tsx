@@ -24,8 +24,8 @@ const AIAssistant: React.FC<{ context?: any }> = ({ context }) => {
           </svg>
         </div>
         <div>
-          <h3 className="font-bold text-indigo-900">MarcAI Smart Scheduling</h3>
-          <p className="text-indigo-600 text-xs">Agende via voz ou texto com inteligência artificial</p>
+          <h3 className="font-bold text-indigo-900"></h3>
+          <p className="text-indigo-600 text-xs"></p>
         </div>
       </div>
       
@@ -33,7 +33,7 @@ const AIAssistant: React.FC<{ context?: any }> = ({ context }) => {
         <input 
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ex: 'Quero um corte de cabelo amanhã às 15h'"
+          placeholder="Agende aqui com IA..."
           className="w-full bg-white border border-indigo-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-12 transition-all"
           onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
         />
