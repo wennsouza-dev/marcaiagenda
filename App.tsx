@@ -345,30 +345,61 @@ const App: React.FC = () => {
     serviceRefs.current[id]?.focus();
   };
 
+  // PERSISTÊNCIA REAL DO PERFIL
   const handleSaveProfile = async () => {
     setIsSaving(true);
-    await new Promise(res => setTimeout(res, 1000));
-    setIsSaving(false);
-    alert("salvo com sucesso");
+    try {
+      const { error } = await supabase.from('professionals')
+        .update({
+          bio: profileData.bio,
+          whatsapp: profileData.whatsapp,
+          address: profileData.address,
+          services: profileData.services,
+          image_url: profileData.photo,
+          gallery: galleryImages
+        })
+        .eq('slug', profileData.customLink);
+      
+      if (error) throw error;
+      
+      await fetchProfessionals();
+      alert("Perfil salvo com sucesso!");
+    } catch (err: any) {
+      alert("Erro ao salvar perfil: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveSchedule = async () => {
     setIsSaving(true);
     await new Promise(res => setTimeout(res, 1000));
     setIsSaving(false);
-    alert("salvo com sucesso");
+    alert("Horários salvos com sucesso!");
   };
 
+  // PERSISTÊNCIA AUTOMÁTICA DA GALERIA
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isProfile: boolean = false) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const base64 = reader.result as string;
         if (isProfile) {
           setProfileData(prev => ({ ...prev, photo: base64 }));
         } else {
-          setGalleryImages(prev => [base64, ...prev]);
+          const newGallery = [base64, ...galleryImages];
+          setGalleryImages(newGallery);
+          
+          // Salva automaticamente para que apareça no Marketplace instantaneamente
+          try {
+            await supabase.from('professionals')
+              .update({ gallery: newGallery })
+              .eq('slug', profileData.customLink);
+            await fetchProfessionals();
+          } catch (err) {
+            console.error("Erro ao persistir galeria:", err);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -397,6 +428,36 @@ const App: React.FC = () => {
     setSelectedService(null);
     setBookingStep('selection');
     setClientData({ name: '', whatsapp: '', terms: false });
+  };
+
+  // SINCRONIZAÇÃO DE DADOS AO LOGAR
+  const handleProfessionalLogin = async (userData: any) => {
+    try {
+      const { data, error } = await supabase.from('professionals')
+        .select('*')
+        .eq('slug', userData.slug) // Ou por outro identificador único de login
+        .single();
+      
+      if (error) throw error;
+
+      setProfileData({
+        bio: data.bio || '',
+        whatsapp: data.whatsapp || '',
+        address: data.address || '',
+        customLink: data.slug,
+        services: data.services || [],
+        photo: data.image_url || 'https://picsum.photos/seed/marcos/100'
+      });
+      
+      setGalleryImages(data.gallery || []);
+      setIsLoggedIn(true);
+      setView(AppView.PROFESSIONAL_DASHBOARD);
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      // Fallback para demo se necessário
+      setIsLoggedIn(true);
+      setView(AppView.PROFESSIONAL_DASHBOARD);
+    }
   };
 
   const currentView = () => {
@@ -461,7 +522,7 @@ const App: React.FC = () => {
             <div className="space-y-4">
               <input placeholder="Usuário" className="w-full px-4 py-3 border rounded-xl" />
               <input type="password" placeholder="Senha" className="w-full px-4 py-3 border rounded-xl" />
-              <button onClick={() => { setIsLoggedIn(true); setView(AppView.PROFESSIONAL_DASHBOARD); }} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Entrar</button>
+              <button onClick={() => handleProfessionalLogin({slug: 'marcos-barbeiro'})} className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold">Entrar</button>
             </div>
           </div>
         </div>
@@ -707,10 +768,11 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-2xl font-black text-slate-900 mb-2">Galeria de Fotos</h2>
-                    <p className="text-slate-500 text-sm">Fotos dos seus trabalhos.</p>
+                    <p className="text-slate-500 text-sm">Fotos dos seus trabalhos que aparecerão no seu perfil público.</p>
                   </div>
                   <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, false)} />
-                  <button onClick={() => galleryInputRef.current?.click()} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">
+                  <button onClick={() => galleryInputRef.current?.click()} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                     Fazer Upload
                   </button>
                 </div>
@@ -718,13 +780,28 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
                   {galleryImages.length === 0 ? (
                     <div className="col-span-full p-20 border-2 border-dashed border-slate-200 rounded-[32px] text-center text-slate-400">
-                      Nenhuma foto enviada ainda.
+                      Nenhuma foto enviada ainda. Use o botão acima para adicionar fotos.
                     </div>
                   ) : (
                     galleryImages.map((img, i) => (
                       <div key={i} className="aspect-square rounded-3xl overflow-hidden border border-slate-200 shadow-sm group relative animate-in zoom-in duration-300">
                         <img src={img} alt={`Trabalho ${i}`} className="w-full h-full object-cover" />
-                        <button onClick={() => setGalleryImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs">✕</button>
+                        <button 
+                          onClick={async () => {
+                            const updated = galleryImages.filter((_, idx) => idx !== i);
+                            setGalleryImages(updated);
+                            // Persiste a remoção
+                            try {
+                              await supabase.from('professionals')
+                                .update({ gallery: updated })
+                                .eq('slug', profileData.customLink);
+                              await fetchProfessionals();
+                            } catch (err) {
+                              console.error("Erro ao deletar da galeria:", err);
+                            }
+                          }} 
+                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs shadow-lg"
+                        >✕</button>
                       </div>
                     ))
                   )}
