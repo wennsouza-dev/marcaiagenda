@@ -26,6 +26,7 @@ const DeveloperPanel: React.FC<{
   const [authed, setAuthed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showTree, setShowTree] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newProf, setNewProf] = useState({ 
     name: '', 
     salonName: '',
@@ -64,53 +65,77 @@ const DeveloperPanel: React.FC<{
 
   const handleRegister = async () => {
     const cleanUsername = newProf.username.trim().toLowerCase().replace(/\s+/g, '');
-    if (!newProf.name || !cleanUsername || !newProf.password) {
+    if (!newProf.name || !cleanUsername || (!editingId && !newProf.password)) {
       alert('Preencha nome completo, usuário e senha.');
       return;
     }
 
     setLoading(true);
     try {
-      const authEmail = `${cleanUsername}@marcai.dev`;
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: authEmail,
-        password: newProf.password,
-        options: {
-          data: {
-            full_name: newProf.name,
-            salon_name: newProf.salonName,
-            role: 'professional'
-          }
-        }
-      });
+      if (editingId) {
+        // Lógica de update
+        const { error } = await supabase.from('professionals').update({
+          name: newProf.name,
+          salon_name: newProf.salonName,
+          category: newProf.category,
+          city: newProf.city,
+          expire_days: newProf.expireDays,
+          reset_word: newProf.resetWord,
+        }).eq('id', editingId);
+        if (error) throw error;
+        alert('Profissional atualizado!');
+      } else {
+        // Lógica de insert
+        const authEmail = `${cleanUsername}@marcai.dev`;
+        const { error: authError } = await supabase.auth.signUp({
+          email: authEmail,
+          password: newProf.password,
+          options: { data: { full_name: newProf.name, role: 'professional' } }
+        });
+        if (authError) throw authError;
 
-      if (authError) throw authError;
+        const professionalData = {
+          name: newProf.name,
+          salon_name: newProf.salonName,
+          category: newProf.category || 'Geral',
+          city: newProf.city || 'Remoto',
+          slug: newProf.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000),
+          bio: 'Profissional cadastrado via painel administrativo.',
+          imageUrl: `https://picsum.photos/seed/${cleanUsername}/400/300`,
+          rating: 5.0,
+          expire_days: newProf.expireDays,
+          reset_word: newProf.resetWord,
+          services: [{ id: 'sx', name: 'Atendimento Padrão', duration: 45, price: 100 }]
+        };
 
-      const professionalData = {
-        name: newProf.name,
-        salon_name: newProf.salonName,
-        category: newProf.category || 'Geral',
-        city: newProf.city || 'Remoto',
-        slug: newProf.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000),
-        bio: 'Profissional cadastrado via painel administrativo.',
-        imageUrl: `https://picsum.photos/seed/${cleanUsername}/400/300`,
-        rating: 5.0,
-        expire_days: newProf.expireDays,
-        reset_word: newProf.resetWord,
-        services: [{ id: 'sx', name: 'Atendimento Padrão', duration: 45, price: 100 }]
-      };
-
-      const { error: dbError } = await supabase.from('professionals').insert([professionalData]);
-      if (dbError) throw dbError;
-
-      alert(`Profissional cadastrado com sucesso!\nAcesso: ${authEmail}`);
+        const { error: dbError } = await supabase.from('professionals').insert([professionalData]);
+        if (dbError) throw dbError;
+        alert(`Profissional cadastrado!\nAcesso: ${authEmail}`);
+      }
+      
       setNewProf({ name: '', salonName: '', category: '', city: '', username: '', password: '', resetWord: '', expireDays: -1 });
+      setEditingId(null);
       onRefresh();
     } catch (err: any) {
-      alert('Erro no cadastro: ' + err.message);
+      alert('Erro: ' + err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEdit = (p: Professional) => {
+    setEditingId(p.id);
+    setNewProf({
+      name: p.name,
+      salonName: p.salonName || '',
+      category: p.category,
+      city: p.city,
+      username: p.slug, // apenas ilustrativo
+      password: '',
+      resetWord: p.resetWord || '',
+      expireDays: p.expireDays || -1
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (id: string) => {
@@ -136,7 +161,7 @@ const DeveloperPanel: React.FC<{
       
       <div className="grid lg:grid-cols-2 gap-8 items-start">
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-          <h3 className="text-xl font-bold text-slate-900">Novo Profissional</h3>
+          <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Editar Profissional' : 'Novo Profissional'}</h3>
           <div className="space-y-6">
             <div className="space-y-4">
               <input placeholder="Nome Completo" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={newProf.name} onChange={(e) => setNewProf({...newProf, name: e.target.value})} />
@@ -147,39 +172,42 @@ const DeveloperPanel: React.FC<{
               </div>
             </div>
             <div className="space-y-4">
-              <div className="relative">
-                <input type="text" placeholder="usuário (ex: joao123)" className="w-full pl-4 pr-32 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={newProf.username} onChange={(e) => setNewProf({...newProf, username: e.target.value})} />
-                <div className="absolute right-4 top-3.5 text-slate-400 text-sm font-medium">@marcai.dev</div>
-              </div>
+              {!editingId && (
+                <div className="relative">
+                  <input type="text" placeholder="usuario (ex: joao123)" className="w-full pl-4 pr-32 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={newProf.username} onChange={(e) => setNewProf({...newProf, username: e.target.value})} />
+                  <div className="absolute right-4 top-3.5 text-slate-400 text-sm font-medium">@marcai.dev</div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
-                <input type="password" placeholder="Senha temporária" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.password} onChange={(e) => setNewProf({...newProf, password: e.target.value})} />
+                {!editingId && <input type="password" placeholder="Senha temporária" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.password} onChange={(e) => setNewProf({...newProf, password: e.target.value})} />}
                 <input placeholder="Palavra reset" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.resetWord} onChange={(e) => setNewProf({...newProf, resetWord: e.target.value})} />
               </div>
-              <input type="number" placeholder="Dias expirar (-1 ilim)" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.expireDays} onChange={(e) => setNewProf({...newProf, expireDays: parseInt(e.target.value) || 0})} />
+              <input type="number" placeholder="- 1" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl" value={newProf.expireDays} onChange={(e) => setNewProf({...newProf, expireDays: parseInt(e.target.value) || 0})} />
             </div>
             <button disabled={loading} onClick={handleRegister} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg disabled:opacity-50 transition-all">
-              {loading ? 'Cadastrando...' : 'Confirmar Registro'}
+              {loading ? 'Salvando...' : 'Confirmar Registro'}
             </button>
+            {editingId && <button onClick={() => { setEditingId(null); setNewProf({ name: '', salonName: '', category: '', city: '', username: '', password: '', resetWord: '', expireDays: -1 }); }} className="w-full text-slate-400 font-bold hover:text-slate-600 transition-colors">Cancelar Edição</button>}
           </div>
 
           <div className="pt-8 border-t border-slate-100">
             <h3 className="text-xl font-bold text-slate-900 mb-4">Profissionais Cadastrados</h3>
             <div className="space-y-3">
               {professionals.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-200 transition-colors">
                   <div className="flex items-center gap-3">
-                    <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover" />
+                    <img src={p.imageUrl} className="w-10 h-10 rounded-full object-cover border border-white shadow-sm" />
                     <div>
                       <p className="font-bold text-sm text-slate-900">{p.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase">{p.category} • {p.city}</p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider">{p.category} • {p.city}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => alert('Editar: ' + p.name)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    <button onClick={() => handleEdit(p)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors" title="Editar">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
-                    <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <button onClick={() => handleDelete(p.id)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="Excluir">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                   </div>
                 </div>
@@ -189,13 +217,17 @@ const DeveloperPanel: React.FC<{
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between bg-slate-900 p-4 rounded-xl">
+          <div className="bg-slate-900 p-4 rounded-xl flex items-center justify-between">
             <h3 className="text-xl font-bold text-white">Arquitetura de Pastas</h3>
-            <button onClick={() => setShowTree(!showTree)} className="text-indigo-400 text-xs font-bold uppercase hover:underline">
-              {showTree ? 'Minimizar' : 'Expandir'}
+            <button onClick={() => setShowTree(!showTree)} className="text-indigo-400 text-[10px] font-black uppercase hover:underline">
+              {showTree ? 'minimizar essa informação' : 'expandir árvore'}
             </button>
           </div>
-          {showTree && <DirectoryTree />}
+          {showTree && (
+            <div className="animate-in slide-in-from-top-4 duration-300">
+              <DirectoryTree />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -208,6 +240,7 @@ const App: React.FC = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -246,6 +279,7 @@ const App: React.FC = () => {
           ...p, 
           salonName: p.salon_name, 
           expireDays: p.expire_days,
+          resetWord: p.reset_word,
           gallery: p.gallery || []
         })));
       } else {
@@ -779,10 +813,12 @@ const App: React.FC = () => {
       {selectedProfessional && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
-            <button onClick={() => setSelectedProfessional(null)} className="absolute top-6 right-6 z-10 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
+            <button onClick={() => { setSelectedProfessional(null); setSelectedService(null); }} className="absolute top-6 right-6 z-50 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
             
+            {/* Header com as informações do profissional movidas para o topo */}
             <div className="relative h-80 overflow-hidden">
               <img src={selectedProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent"></div>
               <div className="absolute top-10 left-10 p-6 bg-slate-900/60 backdrop-blur-md rounded-3xl border border-white/20 animate-in slide-in-from-top-4 duration-500">
                 <span className="bg-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase mb-2 inline-block text-white shadow-lg">{selectedProfessional.category}</span>
                 <h2 className="text-4xl font-black text-white leading-tight">{selectedProfessional.name}</h2>
@@ -791,47 +827,108 @@ const App: React.FC = () => {
             </div>
 
             <div className="p-10">
-              <div className="grid lg:grid-cols-[1fr,400px] gap-12">
-                <div className="space-y-12">
-                  <div className="space-y-4">
-                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
-                    <p className="text-slate-600 leading-relaxed text-lg">{selectedProfessional.bio}</p>
+              {/* Fluxo de Agendamento: Ao clicar no serviço, mostra calendário (mockado) */}
+              {selectedService ? (
+                <div className="animate-in slide-in-from-right-4 duration-500 space-y-8">
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setSelectedService(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                      <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">Agendar {selectedService.name}</h3>
+                      <p className="text-slate-500 font-medium">Horário de Brasília (BRT)</p>
+                    </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
+                  <div className="grid md:grid-cols-[1fr,350px] gap-8">
+                    <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 text-center space-y-6">
+                      <div className="flex justify-between items-center px-4">
+                        <button className="text-slate-400">❮</button>
+                        <span className="font-black text-xl text-slate-800">Junho 2024</span>
+                        <button className="text-slate-400">❯</button>
+                      </div>
+                      <div className="grid grid-cols-7 gap-2">
+                        {['D','S','T','Q','Q','S','S'].map(d => <div key={d} className="text-[10px] font-black text-slate-400 uppercase py-2">{d}</div>)}
+                        {Array.from({length: 30}).map((_, i) => (
+                          <button key={i} className={`h-12 w-full rounded-2xl flex items-center justify-center font-bold transition-all ${i+1 === 18 ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-700'}`}>
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <h4 className="font-black text-slate-900 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Horários Disponíveis
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        {['09:00','09:30','10:00','10:30','14:00','14:30','15:00','16:00'].map(t => (
+                          <button key={t} className="py-3 px-4 border border-slate-200 rounded-xl font-bold text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all">
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={() => alert('Agendamento enviado para aprovação!')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 mt-4 active:scale-95 transition-all">REVISAR E AGENDAR</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid lg:grid-cols-[1fr,400px] gap-12 animate-in fade-in duration-500">
+                  <div className="space-y-12">
+                    {/* Seção Sobre */}
                     <div className="space-y-4">
-                      {selectedProfessional.services?.map(s => (
-                        <div key={s.id} className="p-6 bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-colors group">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{s.name}</span>
-                            <span className="text-slate-400 text-sm font-medium">⏳ {s.duration} min</span>
+                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
+                      <p className="text-slate-600 leading-relaxed text-lg">{selectedProfessional.bio}</p>
+                    </div>
+
+                    {/* Seção Serviços: Clicar leva para agendamento */}
+                    <div className="space-y-6">
+                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
+                      <div className="space-y-4">
+                        {selectedProfessional.services?.map(s => (
+                          <button 
+                            key={s.id} 
+                            onClick={() => setSelectedService(s)}
+                            className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-colors group text-left"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{s.name}</span>
+                              <span className="text-slate-400 text-sm font-medium flex items-center gap-1 mt-1">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                {s.duration} min
+                              </span>
+                            </div>
+                            <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Seção Galeria: Fotos que o profissional fez upload */}
+                    <div className="space-y-6">
+                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {selectedProfessional.gallery?.map((img, i) => (
+                          <div key={i} className="aspect-square rounded-[24px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-transform">
+                            <img src={img} className="w-full h-full object-cover" />
                           </div>
-                          <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
-                        </div>
-                      ))}
+                        ))}
+                        {(!selectedProfessional.gallery || selectedProfessional.gallery.length === 0) && (
+                          <div className="col-span-full p-12 bg-slate-50 rounded-[32px] text-center text-slate-400 italic font-medium">
+                            Nenhuma foto disponível na galeria deste profissional.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                      {selectedProfessional.gallery?.map((img, i) => (
-                        <div key={i} className="aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                          <img src={img} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                      {(!selectedProfessional.gallery || selectedProfessional.gallery.length === 0) && (
-                        <p className="text-slate-400 italic col-span-full">Nenhuma foto disponível na galeria.</p>
-                      )}
-                    </div>
+                  {/* Assistente Lateral */}
+                  <div className="lg:sticky lg:top-10 h-fit">
+                    <AIAssistant context={selectedProfessional} />
                   </div>
                 </div>
-
-                <div className="lg:sticky lg:top-10 h-fit">
-                  <AIAssistant context={selectedProfessional} />
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
