@@ -9,13 +9,13 @@ import { supabase } from './lib/supabase.ts';
 
 const DAYS_OF_WEEK = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-// Usando um UUID válido para evitar erro de sintaxe no Postgres/Supabase
 const DEFAULT_PROFESSIONALS: Professional[] = [
   {
     id: '00000000-0000-0000-0000-000000000001', slug: 'marcos-barbeiro', name: 'Marcos Silva', salonName: 'Barbearia do Marcos', category: 'Beleza', city: 'São Paulo',
     bio: 'Especialista em visagismo e barboterapia.', imageUrl: 'https://picsum.photos/seed/barber/400/300',
     rating: 4.9, services: [{ id: 's1', name: 'Corte de Cabelo', duration: 30, price: 50, preBooking: false }],
-    gallery: ['https://picsum.photos/seed/1/400/300', 'https://picsum.photos/seed/2/400/300']
+    gallery: ['https://picsum.photos/seed/1/400/300', 'https://picsum.photos/seed/2/400/300'],
+    whatsapp: '5511999999999'
   }
 ];
 
@@ -100,7 +100,7 @@ const DeveloperPanel: React.FC<{
           city: newProf.city || 'Remoto',
           slug: newProf.name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 1000),
           bio: 'Profissional cadastrado via painel administrativo.',
-          image_url: `https://picsum.photos/seed/${cleanUsername}/400/300`, // Corrigido para image_url
+          image_url: `https://picsum.photos/seed/${cleanUsername}/400/300`,
           rating: 5.0,
           expire_days: newProf.expireDays,
           reset_word: newProf.resetWord,
@@ -139,10 +139,8 @@ const DeveloperPanel: React.FC<{
 
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja realmente excluir este profissional?')) return;
-    
-    // Evita tentar excluir o ID "1" mockado do Supabase se ele não existir
     if (id.length < 10) {
-      alert("Este é um profissional de demonstração e não pode ser excluído do banco de dados real.");
+      alert("Este é um profissional de demonstração e não pode ser excluído.");
       return;
     }
 
@@ -193,7 +191,6 @@ const DeveloperPanel: React.FC<{
             <button disabled={loading} onClick={handleRegister} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg disabled:opacity-50 transition-all">
               {loading ? 'Salvando...' : 'Confirmar Registro'}
             </button>
-            {editingId && <button onClick={() => { setEditingId(null); setNewProf({ name: '', salonName: '', category: '', city: '', username: '', password: '', resetWord: '', expireDays: -1 }); }} className="w-full text-slate-400 font-bold hover:text-slate-600 transition-colors">Cancelar Edição</button>}
           </div>
 
           <div className="pt-8 border-t border-slate-100">
@@ -225,15 +222,10 @@ const DeveloperPanel: React.FC<{
         <div className="space-y-4">
           <div className="bg-slate-900 p-4 rounded-xl flex items-center justify-between">
             <h3 className="text-xl font-bold text-white">Arquitetura de Pastas</h3>
-            <button onClick={() => setShowTree(!showTree)} className="text-indigo-400 text-[10px] font-black uppercase hover:underline">
-              {showTree ? 'minimizar essa informação' : 'expandir árvore'}
-            </button>
           </div>
-          {showTree && (
-            <div className="animate-in slide-in-from-top-4 duration-300">
-              <DirectoryTree />
-            </div>
-          )}
+          <div className="animate-in slide-in-from-top-4 duration-300">
+            <DirectoryTree />
+          </div>
         </div>
       </div>
     </div>
@@ -247,6 +239,10 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>('18');
+  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [bookingStep, setBookingStep] = useState<'selection' | 'review'>('selection');
+  const [clientData, setClientData] = useState({ name: '', whatsapp: '', terms: false });
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -284,7 +280,7 @@ const App: React.FC = () => {
           salonName: p.salon_name, 
           expireDays: p.expire_days,
           resetWord: p.reset_word,
-          imageUrl: p.image_url, // Mapeado corretamente para o frontend
+          imageUrl: p.image_url,
           gallery: p.gallery || []
         })));
       } else {
@@ -377,6 +373,30 @@ const App: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleFinishBooking = () => {
+    if (!clientData.name || !clientData.whatsapp || !clientData.terms) {
+      alert("Por favor, preencha todos os campos e aceite os termos para concluir.");
+      return;
+    }
+
+    const message = `Olá ${selectedProfessional?.name}, gostaria de agendar o seguinte serviço pelo MarcAI Agenda:\n\n` +
+                    `📌 Serviço: ${selectedService?.name}\n` +
+                    `📅 Data: ${selectedDate} de Junho de 2024\n` +
+                    `⏰ Horário: ${selectedTime}\n` +
+                    `👤 Cliente: ${clientData.name}\n` +
+                    `📱 WhatsApp: ${clientData.whatsapp}\n\n` +
+                    `Aguardo sua confirmação!`;
+    
+    const whatsappLink = `https://wa.me/${selectedProfessional?.whatsapp?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappLink, '_blank');
+    
+    // Reset modal state
+    setSelectedProfessional(null);
+    setSelectedService(null);
+    setBookingStep('selection');
+    setClientData({ name: '', whatsapp: '', terms: false });
   };
 
   const currentView = () => {
@@ -501,10 +521,6 @@ const App: React.FC = () => {
                     </table>
                   </div>
                 </div>
-
-                <div className="pt-4">
-                  <button className="text-indigo-600 font-bold hover:underline">Agendamentos futuros</button>
-                </div>
               </div>
             )}
             
@@ -567,18 +583,6 @@ const App: React.FC = () => {
                           onChange={(e) => setProfileData({...profileData, address: e.target.value})}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-700">Link Personalizado</label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-400 text-xs font-mono">marcai.dev/</span>
-                          <input 
-                            type="text" className="flex-1 p-4 border rounded-2xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                            placeholder="meulink"
-                            value={profileData.customLink}
-                            onChange={(e) => setProfileData({...profileData, customLink: e.target.value})}
-                          />
-                        </div>
-                      </div>
                     </div>
                   </div>
 
@@ -617,7 +621,6 @@ const App: React.FC = () => {
                                 <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={s.preBooking} onChange={e => handleUpdateService(s.id, 'preBooking', e.target.checked)} />
                                 <span className="text-xs font-bold text-slate-600">Pré-agendamento</span>
                               </div>
-                              <p className="text-[9px] text-indigo-400">* Libera caixa de confirmação extra</p>
                             </div>
                             <div className="flex items-center gap-2 h-full pb-1">
                               <button 
@@ -634,25 +637,13 @@ const App: React.FC = () => {
                               </button>
                             </div>
                           </div>
-                          
-                          {s.preBooking && (
-                            <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-slate-200/50 mt-2">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Regras do Pré-agendamento (enviadas ao cliente)</label>
-                              <textarea 
-                                className="w-full p-3 rounded-xl bg-white border border-slate-200 text-xs mt-1 min-h-[80px]"
-                                placeholder="Descreva as condições para este agendamento (ex: tolerância de atraso, cancelamento)..."
-                                value={s.preBookingRules || ''}
-                                onChange={e => handleUpdateService(s.id, 'preBookingRules', e.target.value)}
-                              ></textarea>
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>
                   </div>
 
                   <div className="flex justify-end pt-6">
-                    <button onClick={handleSaveProfile} disabled={isSaving} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70">
+                    <button onClick={handleSaveProfile} disabled={isSaving} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-70">
                       {isSaving ? 'Salvando...' : 'Salvar Perfil'}
                     </button>
                   </div>
@@ -702,73 +693,9 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" id="lunch_active" className="w-5 h-5 accent-indigo-600" checked={lunchBreak.active} onChange={e => setLunchBreak({...lunchBreak, active: e.target.checked})} />
-                      <label htmlFor="lunch_active" className="text-sm font-bold text-slate-700">Definir horário de almoço</label>
-                    </div>
-                    {lunchBreak.active && (
-                      <div className="flex gap-4 animate-in slide-in-from-top-1">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Início</label>
-                          <input type="time" value={lunchBreak.start} onChange={e => setLunchBreak({...lunchBreak, start: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 bg-white font-mono" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fim</label>
-                          <input type="time" value={lunchBreak.end} onChange={e => setLunchBreak({...lunchBreak, end: e.target.value})} className="w-full p-3 rounded-xl border border-slate-200 bg-white font-mono" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-slate-700">Adicionar horários especiais</h3>
-                    <div className="space-y-3">
-                      {specialHours.map((h, i) => (
-                        <div key={i} className="p-5 bg-white border border-slate-200 rounded-3xl flex flex-wrap items-end gap-4 shadow-sm relative">
-                           <button onClick={() => setSpecialHours(specialHours.filter((_, idx) => idx !== i))} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">✕</button>
-                          <div className="flex-1 min-w-[140px]">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Dia</label>
-                            <input type="date" className="w-full p-3 rounded-xl border border-slate-200" value={h.date} onChange={e => {
-                              const newHours = [...specialHours]; newHours[i].date = e.target.value; setSpecialHours(newHours);
-                            }} />
-                          </div>
-                          {!h.closed && (
-                            <>
-                              <div className="w-28">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Abertura</label>
-                                <input type="time" className="w-full p-3 rounded-xl border border-slate-200" value={h.open} onChange={e => {
-                                  const nh = [...specialHours]; nh[i].open = e.target.value; setSpecialHours(nh);
-                                }} />
-                              </div>
-                              <div className="w-28">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Fechamento</label>
-                                <input type="time" className="w-full p-3 rounded-xl border border-slate-200" value={h.close} onChange={e => {
-                                  const nh = [...specialHours]; nh[i].close = e.target.value; setSpecialHours(nh);
-                                }} />
-                              </div>
-                            </>
-                          )}
-                          <div className="flex items-center gap-2 mb-3 px-2">
-                            <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={h.closed} onChange={e => {
-                              const nh = [...specialHours]; nh[i].closed = e.target.checked; setSpecialHours(nh);
-                            }} />
-                            <span className="text-xs font-medium text-slate-600">Não haverá funcionamento</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={() => setSpecialHours([...specialHours, { date: '', open: '', close: '', closed: false }])} className="text-indigo-600 font-bold text-xs hover:underline">+ Adicionar dia especial</button>
-                  </div>
-
                   <div className="pt-6 flex justify-end">
-                    <button onClick={handleSaveSchedule} disabled={isSaving} className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100/50 hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-70">
-                      {isSaving ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      )}
-                      Salvar Horários
+                    <button onClick={handleSaveSchedule} disabled={isSaving} className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-lg hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-70">
+                      {isSaving ? 'Salvando...' : 'Salvar Horários'}
                     </button>
                   </div>
                 </div>
@@ -780,10 +707,10 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-2xl font-black text-slate-900 mb-2">Galeria de Fotos</h2>
-                    <p className="text-slate-500 text-sm">Faça upload de fotos dos seus trabalhos para exibir no seu perfil.</p>
+                    <p className="text-slate-500 text-sm">Fotos dos seus trabalhos.</p>
                   </div>
                   <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, false)} />
-                  <button onClick={() => galleryInputRef.current?.click()} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">
+                  <button onClick={() => galleryInputRef.current?.click()} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all">
                     Fazer Upload
                   </button>
                 </div>
@@ -791,7 +718,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
                   {galleryImages.length === 0 ? (
                     <div className="col-span-full p-20 border-2 border-dashed border-slate-200 rounded-[32px] text-center text-slate-400">
-                      Nenhuma foto enviada ainda. Suas fotos aparecerão aqui.
+                      Nenhuma foto enviada ainda.
                     </div>
                   ) : (
                     galleryImages.map((img, i) => (
@@ -818,7 +745,7 @@ const App: React.FC = () => {
       {selectedProfessional && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[40px] w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 shadow-2xl relative">
-            <button onClick={() => { setSelectedProfessional(null); setSelectedService(null); }} className="absolute top-6 right-6 z-50 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
+            <button onClick={() => { setSelectedProfessional(null); setSelectedService(null); setBookingStep('selection'); }} className="absolute top-6 right-6 z-50 bg-slate-900/50 hover:bg-slate-900/80 w-10 h-10 rounded-full text-white flex items-center justify-center transition-colors">✕</button>
             
             <div className="relative h-80 overflow-hidden">
               <img src={selectedProfessional.imageUrl} className="w-full h-full object-cover rounded-t-[40px]" />
@@ -831,100 +758,161 @@ const App: React.FC = () => {
             </div>
 
             <div className="p-10">
-              {selectedService ? (
-                <div className="animate-in slide-in-from-right-4 duration-500 space-y-8">
+              {bookingStep === 'selection' ? (
+                <>
+                  {selectedService ? (
+                    <div className="animate-in slide-in-from-right-4 duration-500 space-y-8">
+                      <div className="flex items-center gap-4">
+                        <button onClick={() => setSelectedService(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                          <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <div>
+                          <h3 className="text-2xl font-black text-slate-900 tracking-tight">Agendar {selectedService.name}</h3>
+                          <p className="text-slate-500 font-medium">Horário de Brasília (BRT)</p>
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-[1fr,350px] gap-8">
+                        <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 text-center space-y-6">
+                          <div className="flex justify-between items-center px-4">
+                            <button className="text-slate-400">❮</button>
+                            <span className="font-black text-xl text-slate-800">Junho 2024</span>
+                            <button className="text-slate-400">❯</button>
+                          </div>
+                          <div className="grid grid-cols-7 gap-2">
+                            {['D','S','T','Q','Q','S','S'].map(d => <div key={d} className="text-[10px] font-black text-slate-400 uppercase py-2">{d}</div>)}
+                            {Array.from({length: 30}).map((_, i) => (
+                              <button key={i} onClick={() => setSelectedDate((i+1).toString())} className={`h-12 w-full rounded-2xl flex items-center justify-center font-bold transition-all ${selectedDate === (i+1).toString() ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-700'}`}>
+                                {i + 1}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <h4 className="font-black text-slate-900 flex items-center gap-2">
+                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Horários Disponíveis
+                          </h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            {['09:00','09:30','10:00','10:30','14:00','14:30','15:00','16:00'].map(t => (
+                              <button key={t} onClick={() => setSelectedTime(t)} className={`py-3 px-4 border rounded-xl font-bold transition-all ${selectedTime === t ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'border-slate-200 text-slate-600 hover:border-indigo-600 hover:text-indigo-600'}`}>
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                          <button onClick={() => setBookingStep('review')} disabled={!selectedTime} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 mt-4 active:scale-95 transition-all disabled:opacity-50">REVISAR E AGENDAR</button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid lg:grid-cols-[1fr,400px] gap-12 animate-in fade-in duration-500">
+                      <div className="space-y-12">
+                        <div className="space-y-4">
+                          <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
+                          <p className="text-slate-600 leading-relaxed text-lg">{selectedProfessional.bio}</p>
+                        </div>
+
+                        <div className="space-y-6">
+                          <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
+                          <div className="space-y-4">
+                            {selectedProfessional.services?.map(s => (
+                              <button 
+                                key={s.id} 
+                                onClick={() => setSelectedService(s)}
+                                className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-colors group text-left"
+                              >
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{s.name}</span>
+                                  <span className="text-slate-400 text-sm font-medium flex items-center gap-1 mt-1">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    {s.duration} min
+                                  </span>
+                                </div>
+                                <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            {selectedProfessional.gallery?.map((img, i) => (
+                              <div key={i} className="aspect-square rounded-[24px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-transform">
+                                <img src={img} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                            {(!selectedProfessional.gallery || selectedProfessional.gallery.length === 0) && (
+                              <div className="col-span-full p-12 bg-slate-50 rounded-[32px] text-center text-slate-400 italic font-medium">
+                                Nenhuma foto disponível na galeria deste profissional.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="lg:sticky lg:top-10 h-fit">
+                        <AIAssistant context={selectedProfessional} />
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="max-w-2xl mx-auto space-y-12 animate-in fade-in zoom-in duration-500">
                   <div className="flex items-center gap-4">
-                    <button onClick={() => setSelectedService(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                    <button onClick={() => setBookingStep('selection')} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                       <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
                     <div>
-                      <h3 className="text-2xl font-black text-slate-900 tracking-tight">Agendar {selectedService.name}</h3>
-                      <p className="text-slate-500 font-medium">Horário de Brasília (BRT)</p>
+                      <h3 className="text-3xl font-black text-slate-900 tracking-tight">Quase lá!</h3>
+                      <p className="text-slate-500 font-medium">Complete seus dados para confirmar o horário.</p>
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-[1fr,350px] gap-8">
-                    <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 text-center space-y-6">
-                      <div className="flex justify-between items-center px-4">
-                        <button className="text-slate-400">❮</button>
-                        <span className="font-black text-xl text-slate-800">Junho 2024</span>
-                        <button className="text-slate-400">❯</button>
-                      </div>
-                      <div className="grid grid-cols-7 gap-2">
-                        {['D','S','T','Q','Q','S','S'].map(d => <div key={d} className="text-[10px] font-black text-slate-400 uppercase py-2">{d}</div>)}
-                        {Array.from({length: 30}).map((_, i) => (
-                          <button key={i} className={`h-12 w-full rounded-2xl flex items-center justify-center font-bold transition-all ${i+1 === 18 ? 'bg-indigo-600 text-white shadow-lg' : 'hover:bg-indigo-50 text-slate-700'}`}>
-                            {i + 1}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
+                  <div className="bg-slate-50 p-10 rounded-[40px] border border-slate-100 space-y-8">
                     <div className="space-y-6">
-                      <h4 className="font-black text-slate-900 flex items-center gap-2">
-                        <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        Horários Disponíveis
-                      </h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        {['09:00','09:30','10:00','10:30','14:00','14:30','15:00','16:00'].map(t => (
-                          <button key={t} className="py-3 px-4 border border-slate-200 rounded-xl font-bold text-slate-600 hover:border-indigo-600 hover:text-indigo-600 transition-all">
-                            {t}
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Seu Nome Completo</label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                          placeholder="Digite seu nome"
+                          value={clientData.name}
+                          onChange={(e) => setClientData({...clientData, name: e.target.value})}
+                        />
                       </div>
-                      <button onClick={() => alert('Agendamento enviado para aprovação!')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 mt-4 active:scale-95 transition-all">REVISAR E AGENDAR</button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid lg:grid-cols-[1fr,400px] gap-12 animate-in fade-in duration-500">
-                  <div className="space-y-12">
-                    <div className="space-y-4">
-                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Sobre</h4>
-                      <p className="text-slate-600 leading-relaxed text-lg">{selectedProfessional.bio}</p>
-                    </div>
-
-                    <div className="space-y-6">
-                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Serviços</h4>
-                      <div className="space-y-4">
-                        {selectedProfessional.services?.map(s => (
-                          <button 
-                            key={s.id} 
-                            onClick={() => setSelectedService(s)}
-                            className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-colors group text-left"
-                          >
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{s.name}</span>
-                              <span className="text-slate-400 text-sm font-medium flex items-center gap-1 mt-1">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                {s.duration} min
-                              </span>
-                            </div>
-                            <span className="font-black text-2xl text-indigo-600">R$ {s.price}</span>
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Seu WhatsApp</label>
+                        <input 
+                          type="tel" 
+                          className="w-full p-4 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                          placeholder="Ex: 32988887777"
+                          value={clientData.whatsapp}
+                          onChange={(e) => setClientData({...clientData, whatsapp: e.target.value})}
+                        />
                       </div>
                     </div>
 
-                    <div className="space-y-6">
-                      <h4 className="text-2xl font-black text-slate-900 border-l-4 border-indigo-600 pl-4">Galeria de fotos</h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        {selectedProfessional.gallery?.map((img, i) => (
-                          <div key={i} className="aspect-square rounded-[24px] overflow-hidden border border-slate-200 shadow-sm hover:scale-[1.02] transition-transform">
-                            <img src={img} className="w-full h-full object-cover" />
-                          </div>
-                        ))}
-                        {(!selectedProfessional.gallery || selectedProfessional.gallery.length === 0) && (
-                          <div className="col-span-full p-12 bg-slate-50 rounded-[32px] text-center text-slate-400 italic font-medium">
-                            Nenhuma foto disponível na galeria deste profissional.
-                          </div>
-                        )}
-                      </div>
+                    <div className="p-6 bg-white border border-slate-100 rounded-[28px] shadow-sm flex items-center gap-4">
+                      <input 
+                        type="checkbox" 
+                        id="terms"
+                        className="w-6 h-6 accent-indigo-600 rounded-lg cursor-pointer"
+                        checked={clientData.terms}
+                        onChange={(e) => setClientData({...clientData, terms: e.target.checked})}
+                      />
+                      <label htmlFor="terms" className="text-sm font-bold text-slate-600 cursor-pointer select-none">
+                        Li e concordo com os termos de agendamento e políticas de cancelamento.
+                      </label>
                     </div>
-                  </div>
 
-                  <div className="lg:sticky lg:top-10 h-fit">
-                    <AIAssistant context={selectedProfessional} />
+                    <button 
+                      onClick={handleFinishBooking}
+                      className="w-full py-5 bg-indigo-600 text-white rounded-[28px] font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98]"
+                    >
+                      CONCLUIR AGENDAMENTO
+                    </button>
                   </div>
                 </div>
               )}
