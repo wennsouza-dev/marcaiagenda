@@ -15,6 +15,9 @@ const App: React.FC = () => {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   
+  // Estado do Profissional Logado
+  const [loggedProfessional, setLoggedProfessional] = useState<Professional | null>(null);
+
   // Dev Mode Security
   const [devPasswordInput, setDevPasswordInput] = useState('');
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
@@ -32,7 +35,6 @@ const App: React.FC = () => {
 
   // Referência para upload de foto no Dashboard
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   // Estados de Login
   const [email, setEmail] = useState('');
@@ -55,6 +57,9 @@ const App: React.FC = () => {
   const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+
+  // Formulário de Serviço
+  const [serviceForm, setServiceForm] = useState<Partial<Service> | null>(null);
 
   const fetchProfessionals = async () => {
     setLoading(true);
@@ -107,6 +112,7 @@ const App: React.FC = () => {
   const handleNavigate = (newView: AppView) => {
     if (newView === AppView.LANDING && isLoggedIn) {
       setIsLoggedIn(false);
+      setLoggedProfessional(null);
     }
     setView(newView);
   };
@@ -123,9 +129,10 @@ const App: React.FC = () => {
 
   const handleCreatePro = (e: React.FormEvent) => {
     e.preventDefault();
+    const slug = newPro.login.toLowerCase();
     const createdPro: Professional = {
       id: Math.random().toString(36).substr(2, 9),
-      slug: newPro.login.toLowerCase(),
+      slug: slug,
       name: newPro.name,
       salonName: newPro.salonName,
       city: newPro.city,
@@ -133,35 +140,87 @@ const App: React.FC = () => {
       bio: '',
       imageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
       rating: 5.0,
-      services: [],
+      services: [{ id: 's1', name: 'Corte Tradicional', price: 50, duration: 30 }],
       expireDays: newPro.expireDays,
       resetWord: newPro.resetWord,
-      whatsapp: ''
+      whatsapp: '',
+      address: ''
     };
     
     setProfessionals([createdPro, ...professionals]);
-    alert(`Profissional cadastrado com sucesso!\nLogin: ${newPro.login}@marcai.dev`);
+    alert(`Profissional cadastrado com sucesso!\nLogin: ${slug}@marcai.dev\nSenha: ${newPro.password}`);
     setNewPro({ name: '', salonName: '', city: '', login: '', expireDays: 30, password: '', resetWord: '' });
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Simulação de busca por e-mail (slug@marcai.dev)
+    const proFound = professionals.find(p => `${p.slug}@marcai.dev` === email.toLowerCase().trim());
+
     setTimeout(() => {
-      setIsLoggedIn(true);
-      setView(AppView.PROFESSIONAL_DASHBOARD);
+      if (proFound) {
+        setLoggedProfessional(proFound);
+        setIsLoggedIn(true);
+        setView(AppView.PROFESSIONAL_DASHBOARD);
+        setEmail('');
+        setPassword('');
+      } else {
+        alert("E-mail ou senha inválidos. Utilize o login cadastrado no Painel Dev.");
+      }
       setLoading(false);
     }, 800);
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && loggedProfessional) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setProfileImage(reader.result as string);
+        setLoggedProfessional({ ...loggedProfessional, imageUrl: reader.result as string });
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfileChanges = () => {
+    if (!loggedProfessional) return;
+    setLoading(true);
+
+    // Atualiza o profissional logado na lista principal
+    setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? loggedProfessional : p));
+
+    setTimeout(() => {
+      setLoading(false);
+      alert("Alterações salvas com sucesso!");
+    }, 600);
+  };
+
+  const handleOpenServiceForm = (service?: Service) => {
+    if (service) setServiceForm({ ...service });
+    else setServiceForm({ name: '', price: 0, duration: 30 });
+  };
+
+  const handleSaveService = () => {
+    if (!serviceForm?.name || !loggedProfessional) return;
+
+    let updatedServices = [...loggedProfessional.services];
+    if (serviceForm.id) {
+      updatedServices = updatedServices.map(s => s.id === serviceForm.id ? (serviceForm as Service) : s);
+    } else {
+      const newService = { ...serviceForm, id: Math.random().toString(36).substr(2, 9) } as Service;
+      updatedServices.push(newService);
+    }
+
+    setLoggedProfessional({ ...loggedProfessional, services: updatedServices });
+    setServiceForm(null);
+  };
+
+  const handleDeleteService = (id: string) => {
+    if (confirm("Deseja remover este serviço?") && loggedProfessional) {
+      const updatedServices = loggedProfessional.services.filter(s => s.id !== id);
+      setLoggedProfessional({ ...loggedProfessional, services: updatedServices });
     }
   };
 
@@ -262,7 +321,7 @@ const App: React.FC = () => {
                 {filteredProfessionals.map(p => (
                   <ProfessionalCard 
                     key={p.id} 
-                    professional={p.id === 'jd-id' && profileImage ? {...p, imageUrl: profileImage} : p} 
+                    professional={p} 
                     onSelect={handleSelectProfessional} 
                   />
                 ))}
@@ -280,7 +339,7 @@ const App: React.FC = () => {
              <div className="bg-white rounded-[48px] overflow-hidden border border-slate-100 shadow-xl">
                <div className="p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
                  <img 
-                    src={selectedProfessional.id === 'jd-id' && profileImage ? profileImage : selectedProfessional.imageUrl} 
+                    src={selectedProfessional.imageUrl} 
                     className="w-40 h-40 md:w-56 md:h-56 rounded-[48px] object-cover shadow-2xl border-4 border-white" 
                     alt={selectedProfessional.name} 
                   />
@@ -364,7 +423,7 @@ const App: React.FC = () => {
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">E-mail</label>
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" className="w-full bg-slate-50 border-none rounded-[24px] px-6 py-4 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu-slug@marcai.dev" className="w-full bg-slate-50 border-none rounded-[24px] px-6 py-4 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Senha</label>
@@ -377,7 +436,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {view === AppView.PROFESSIONAL_DASHBOARD && (
+        {view === AppView.PROFESSIONAL_DASHBOARD && loggedProfessional && (
           <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="flex flex-col md:flex-row gap-8">
               <aside className="md:w-72 space-y-2">
@@ -385,15 +444,15 @@ const App: React.FC = () => {
                   <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
                   <div 
                     onClick={() => fileInputRef.current?.click()} 
-                    className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-black text-2xl mb-4 border-2 border-indigo-100 shadow-inner cursor-pointer hover:opacity-80 transition-all relative"
+                    className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-black text-2xl mb-4 border-2 border-indigo-100 shadow-inner cursor-pointer hover:opacity-80 transition-all relative overflow-hidden"
                   >
-                    {profileImage ? <img src={profileImage} className="w-full h-full object-cover rounded-full" alt="Perfil" /> : "JD"}
+                    {loggedProfessional.imageUrl ? <img src={loggedProfessional.imageUrl} className="w-full h-full object-cover rounded-full" alt="Perfil" /> : loggedProfessional.name[0]}
                     <div className="absolute inset-0 bg-black/20 opacity-0 hover:opacity-100 rounded-full flex items-center justify-center transition-opacity">
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
                   </div>
-                  <h4 className="font-black text-slate-900">João Donizete</h4>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Licença: 28 dias restantes</p>
+                  <h4 className="font-black text-slate-900">{loggedProfessional.name}</h4>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Licença: {loggedProfessional.expireDays || 30} dias restantes</p>
                 </div>
                 <button onClick={() => setDashTab('appointments')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'appointments' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Agendamentos</button>
                 <button onClick={() => setDashTab('pre_bookings')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'pre_bookings' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Pré-agendamento</button>
@@ -460,34 +519,61 @@ const App: React.FC = () => {
                       <div className="grid md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Nome Profissional</label>
-                          <input type="text" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="João Donizete" />
+                          <input 
+                            type="text" 
+                            className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500" 
+                            value={loggedProfessional.name} 
+                            onChange={e => setLoggedProfessional({...loggedProfessional, name: e.target.value})}
+                          />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">WhatsApp Comercial</label>
-                          <input type="tel" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="11999999999" />
+                          <input 
+                            type="tel" 
+                            className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500" 
+                            value={loggedProfessional.whatsapp || ''} 
+                            onChange={e => setLoggedProfessional({...loggedProfessional, whatsapp: e.target.value})}
+                          />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Endereço (Exibido no perfil)</label>
-                        <input type="text" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="Rua das Flores, 123, São Paulo - SP" />
+                        <input 
+                          type="text" 
+                          className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500" 
+                          value={loggedProfessional.address || ''} 
+                          onChange={e => setLoggedProfessional({...loggedProfessional, address: e.target.value})}
+                        />
                       </div>
                       
                       <div className="pt-8 border-t border-slate-50">
                         <div className="flex items-center justify-between mb-6">
                           <h4 className="text-xl font-black text-slate-900">Seus Serviços</h4>
-                          <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase">+ Adicionar</button>
+                          <button onClick={() => handleOpenServiceForm()} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">+ Adicionar</button>
                         </div>
+                        {serviceForm && (
+                          <div className="mb-8 p-6 bg-indigo-50 rounded-3xl border border-indigo-100 animate-in zoom-in-95">
+                             <div className="grid md:grid-cols-3 gap-4 mb-4">
+                                <input type="text" placeholder="Nome" className="bg-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" value={serviceForm.name} onChange={e => setServiceForm({...serviceForm, name: e.target.value})} />
+                                <input type="number" placeholder="R$" className="bg-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" value={serviceForm.price || ''} onChange={e => setServiceForm({...serviceForm, price: parseFloat(e.target.value)})} />
+                                <input type="number" placeholder="Min" className="bg-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" value={serviceForm.duration || ''} onChange={e => setServiceForm({...serviceForm, duration: parseInt(e.target.value)})} />
+                             </div>
+                             <div className="flex gap-2"><button onClick={handleSaveService} className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase">Salvar Serviço</button><button onClick={() => setServiceForm(null)} className="px-4 py-2 text-slate-400 font-bold text-xs uppercase">Cancelar</button></div>
+                          </div>
+                        )}
                         <div className="space-y-3">
-                           <div className="bg-slate-50 p-6 rounded-2xl flex items-center justify-between border border-transparent hover:border-indigo-100 transition-all">
-                              <div><p className="font-bold text-slate-900">Corte Tradicional</p><p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">R$ 50,00 • 30 min</p></div>
-                              <div className="flex gap-2">
-                                <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                                <button className="p-2 text-slate-400 hover:text-red-500 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                              </div>
-                           </div>
+                           {loggedProfessional.services.map((s) => (
+                             <div key={s.id} className="bg-slate-50 p-6 rounded-2xl flex items-center justify-between border border-transparent hover:border-indigo-100 transition-all group">
+                                <div><p className="font-bold text-slate-900">{s.name}</p><p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">R$ {s.price},00 • {s.duration} min</p></div>
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => handleOpenServiceForm(s)} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                                  <button onClick={() => handleDeleteService(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                </div>
+                             </div>
+                           ))}
                         </div>
                       </div>
-                      <button className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-xl shadow-indigo-100">Salvar Alterações</button>
+                      <button onClick={handleSaveProfileChanges} className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-xl shadow-indigo-100 transition-all active:scale-[0.98]">Salvar Alterações</button>
                     </div>
                   </div>
                 )}
@@ -537,7 +623,7 @@ const App: React.FC = () => {
                         <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.name} onChange={e => setNewPro({...newPro, name: e.target.value})} placeholder="Ex: João da Silva" />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Nome do Estabelecimento</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Estabelecimento</label>
                         <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.salonName} onChange={e => setNewPro({...newPro, salonName: e.target.value})} placeholder="Ex: Barbearia MarcAI" />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -546,18 +632,14 @@ const App: React.FC = () => {
                           <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.city} onChange={e => setNewPro({...newPro, city: e.target.value})} />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Dias de Acesso</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Dias</label>
                           <input required type="number" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.expireDays} onChange={e => setNewPro({...newPro, expireDays: parseInt(e.target.value)})} />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Login de Acesso</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Login (E-mail prefixo)</label>
                         <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.login} onChange={e => setNewPro({...newPro, login: e.target.value.toLowerCase().trim()})} placeholder="Ex: joao" />
                         <p className="text-[10px] text-indigo-400 italic">Gera: {newPro.login || '...' }@marcai.dev</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white" value={newPro.password} onChange={e => setNewPro({...newPro, password: e.target.value})} placeholder="Senha inicial" />
-                        <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white" value={newPro.resetWord} onChange={e => setNewPro({...newPro, resetWord: e.target.value})} placeholder="Palavra secreta" />
                       </div>
                     </div>
                     <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-900/40 hover:bg-indigo-700">Criar Conta Professional</button>
