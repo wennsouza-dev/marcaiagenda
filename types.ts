@@ -25,6 +25,8 @@ export interface Professional {
   whatsapp?: string;
   address?: string;
   customLink?: string;
+  // Added password property to match database fields and fix type error in login logic
+  password?: string;
 }
 
 export interface Appointment {

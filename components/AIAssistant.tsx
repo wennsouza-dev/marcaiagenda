@@ -24,8 +24,9 @@ const AIAssistant: React.FC<{ context?: any }> = ({ context }) => {
           </svg>
         </div>
         <div>
-          <h3 className="font-bold text-indigo-900"></h3>
-          <p className="text-indigo-600 text-xs"></p>
+          {/* Added assistant name and description labels */}
+          <h3 className="font-bold text-indigo-900">MarcAI Assistant</h3>
+          <p className="text-indigo-600 text-xs">Agendamento Inteligente</p>
         </div>
       </div>
       
