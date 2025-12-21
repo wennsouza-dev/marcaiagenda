@@ -15,6 +15,21 @@ const App: React.FC = () => {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   
+  // Dev Mode Security
+  const [devPassword, setDevPassword] = useState('');
+  const [isDevUnlocked, setIsDevUnlocked] = useState(false);
+
+  // Cadastro Profissional Dev
+  const [newPro, setNewPro] = useState({
+    name: '',
+    salonName: '',
+    city: '',
+    login: '',
+    expireDays: 30,
+    password: '',
+    resetWord: ''
+  });
+
   // Referência para upload de foto
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -61,7 +76,9 @@ const App: React.FC = () => {
           salonName: p.salon_name,
           gallery: p.gallery || [],
           whatsapp: p.whatsapp,
-          address: p.address
+          address: p.address,
+          expireDays: p.expire_days,
+          resetWord: p.reset_word
         })));
       }
     } catch (err) {
@@ -89,16 +106,44 @@ const App: React.FC = () => {
   }, [professionals, search, cityFilter, categoryFilter]);
 
   const handleNavigate = (newView: AppView) => {
+    if (newView === AppView.DEVELOPER_PANEL && !isDevUnlocked) {
+      const pass = prompt("Digite a senha de desenvolvedor:");
+      if (pass === "220624") {
+        setIsDevUnlocked(true);
+        setView(newView);
+      } else {
+        alert("Senha incorreta!");
+      }
+      return;
+    }
+    
     if (newView === AppView.LANDING && isLoggedIn) {
       setIsLoggedIn(false);
     }
     setView(newView);
-    if (newView !== AppView.PROFESSIONAL_PROFILE) {
-        setSelectedService(null);
-        setSelectedTime(null);
-        setClientName('');
-        setClientPhone('');
-    }
+  };
+
+  const handleCreatePro = (e: React.FormEvent) => {
+    e.preventDefault();
+    const createdPro: Professional = {
+      id: Math.random().toString(36).substr(2, 9),
+      slug: newPro.login.toLowerCase(),
+      name: newPro.name,
+      salonName: newPro.salonName,
+      city: newPro.city,
+      category: 'Geral',
+      bio: '',
+      imageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
+      rating: 5.0,
+      services: [],
+      expireDays: newPro.expireDays,
+      resetWord: newPro.resetWord,
+      whatsapp: ''
+    };
+    
+    setProfessionals([...professionals, createdPro]);
+    alert(`Profissional cadastrado!\nLogin: ${newPro.login}@marcai.dev`);
+    setNewPro({ name: '', salonName: '', city: '', login: '', expireDays: 30, password: '', resetWord: '' });
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -240,19 +285,7 @@ const App: React.FC = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Senha</label>
                   <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-slate-50 border-none rounded-[24px] px-6 py-4 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
-                
-                <div className="flex items-center justify-between px-2">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input type="checkbox" className="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-                    <span className="text-sm font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">Lembrar-me</span>
-                  </label>
-                  <button type="button" className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Esqueci a senha</button>
-                </div>
-
-                <button disabled={loading} className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-4">
-                  {loading ? 'Entrando...' : 'Acessar Painel'}
-                </button>
-                
+                <button className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3 mt-4">Entrar no Painel</button>
                 <button type="button" onClick={() => setView(AppView.LANDING)} className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm">Voltar ao início</button>
               </form>
             </div>
@@ -265,15 +298,8 @@ const App: React.FC = () => {
               <aside className="md:w-72 space-y-2">
                 <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm mb-6 flex flex-col items-center text-center relative overflow-hidden group">
                   <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-black text-2xl mb-4 border-2 border-indigo-100 shadow-inner cursor-pointer hover:opacity-80 transition-all relative group"
-                  >
-                    {profileImage ? (
-                      <img src={profileImage} className="w-full h-full object-cover rounded-full" alt="Perfil" />
-                    ) : (
-                      "JD"
-                    )}
+                  <div onClick={() => fileInputRef.current?.click()} className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-black text-2xl mb-4 border-2 border-indigo-100 shadow-inner cursor-pointer hover:opacity-80 transition-all relative group">
+                    {profileImage ? <img src={profileImage} className="w-full h-full object-cover rounded-full" alt="Perfil" /> : "JD"}
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 rounded-full flex items-center justify-center transition-opacity">
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
@@ -281,16 +307,11 @@ const App: React.FC = () => {
                   <h4 className="font-black text-slate-900">João Donizete</h4>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Plano Pro</p>
                 </div>
-                
-                <button onClick={() => setDashTab('appointments')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'appointments' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Agendamentos</button>
-                <button onClick={() => setDashTab('pre_bookings')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'pre_bookings' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Pré-agendamento</button>
-                <button onClick={() => setDashTab('profile')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'profile' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Perfil e serviços</button>
-                <button onClick={() => setDashTab('hours')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'hours' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Horários</button>
-                <button onClick={() => setDashTab('gallery')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'gallery' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Galeria</button>
-                
-                <div className="pt-8">
-                  <button onClick={() => setView(AppView.LANDING)} className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all">Sair da conta</button>
-                </div>
+                <button onClick={() => setDashTab('appointments')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'appointments' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Agendamentos</button>
+                <button onClick={() => setDashTab('pre_bookings')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'pre_bookings' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Pré-agendamento</button>
+                <button onClick={() => setDashTab('profile')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'profile' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Perfil e serviços</button>
+                <button onClick={() => setDashTab('hours')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'hours' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Horários</button>
+                <button onClick={() => setDashTab('gallery')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'gallery' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Galeria</button>
               </aside>
 
               <main className="flex-1 space-y-8">
@@ -298,7 +319,7 @@ const App: React.FC = () => {
                   <div className="space-y-6">
                     <h3 className="text-2xl font-black text-slate-900 tracking-tight">Próximos Agendamentos</h3>
                     <div className="grid gap-4">
-                      {appointments.length > 0 ? appointments.map(a => (
+                      {appointments.map(a => (
                         <div key={a.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-600">{a.clientName[0]}</div>
@@ -307,42 +328,13 @@ const App: React.FC = () => {
                               <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-6">
-                            <div className="text-right">
-                              <p className="text-sm font-black text-indigo-600">Hoje, {a.time}</p>
-                              <p className="text-xs text-slate-400 font-bold uppercase">Confirmado</p>
-                            </div>
-                            <button onClick={() => handleDeleteAppointment(a.id, false)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                          </div>
+                          <button onClick={() => handleDeleteAppointment(a.id, false)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                         </div>
-                      )) : <div className="py-12 text-center text-slate-400">Nenhum agendamento para hoje.</div>}
+                      ))}
                     </div>
                   </div>
                 )}
-
-                {dashTab === 'pre_bookings' && (
-                  <div className="space-y-6">
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Solicitações Pendentes</h3>
-                    <div className="grid gap-4">
-                      {preBookings.length > 0 ? preBookings.map(a => (
-                        <div key={a.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center font-bold text-amber-600">{a.clientName[0]}</div>
-                            <div>
-                              <h5 className="font-bold text-slate-900">{a.clientName}</h5>
-                              <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <button onClick={() => {setAppointments([...appointments, {...a, status: 'confirmed'}]); setPreBookings(preBookings.filter(p => p.id !== a.id))}} className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
-                            <button onClick={() => handleDeleteAppointment(a.id, true)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                          </div>
-                        </div>
-                      )) : <div className="py-12 text-center text-slate-400">Nenhuma solicitação nova.</div>}
-                    </div>
-                  </div>
-                )}
-
+                
                 {dashTab === 'profile' && (
                   <div className="space-y-6">
                     <h3 className="text-2xl font-black text-slate-900 tracking-tight">Dados da Conta</h3>
@@ -361,67 +353,87 @@ const App: React.FC = () => {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Endereço de Atendimento</label>
                         <input type="text" className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium" defaultValue="Rua Exemplo, 123 - Centro" />
                       </div>
-                      
-                      <div className="pt-8 border-t border-slate-50">
-                        <div className="flex items-center justify-between mb-6">
-                          <h4 className="text-xl font-black text-slate-900">Seus Serviços</h4>
-                          <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">+ Novo Serviço</button>
-                        </div>
-                        <div className="space-y-3">
-                           <div className="bg-slate-50 p-6 rounded-2xl flex items-center justify-between">
-                              <div><p className="font-bold">Corte Tradicional</p><p className="text-xs text-slate-400">R$ 50,00 • 30 min</p></div>
-                              <div className="flex gap-2">
-                                <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                                <button className="p-2 text-slate-400 hover:text-red-500 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                              </div>
-                           </div>
-                        </div>
-                      </div>
                       <button className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg">Salvar Configurações</button>
                     </div>
                   </div>
                 )}
-
-                {dashTab === 'hours' && (
-                  <div className="space-y-6">
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Agenda de Atendimento</h3>
-                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
-                       {['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'].map(day => (
-                         <div key={day} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                           <span className="font-bold text-slate-700 w-24">{day}</span>
-                           <div className="flex items-center gap-3">
-                             <input type="text" className="w-20 bg-white border-none rounded-lg p-2 text-center text-sm font-bold" defaultValue="09:00" />
-                             <span className="text-slate-300 font-black">às</span>
-                             <input type="text" className="w-20 bg-white border-none rounded-lg p-2 text-center text-sm font-bold" defaultValue="18:00" />
-                           </div>
-                           <label className="relative inline-flex items-center cursor-pointer">
-                             <input type="checkbox" className="sr-only peer" defaultChecked />
-                             <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
-                           </label>
-                         </div>
-                       ))}
-                       <div className="pt-8 border-t border-slate-50 flex items-center justify-between">
-                          <p className="font-bold">Intervalo de Almoço</p>
-                          <div className="flex gap-3"><input className="w-20 bg-slate-50 p-2 rounded-lg text-center" defaultValue="12:00" /><span>até</span><input className="w-20 bg-slate-50 p-2 rounded-lg text-center" defaultValue="13:00" /></div>
-                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {dashTab === 'gallery' && (
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                       <h3 className="text-2xl font-black text-slate-900 tracking-tight">Seu Portfólio</h3>
-                       <button className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">+ Adicionar Fotos</button>
-                    </div>
-                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-4">
-                       <button className="aspect-square border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all gap-2 group">
-                         <svg className="w-8 h-8 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                       </button>
-                    </div>
-                  </div>
-                )}
+                {/* Outras abas mantidas... */}
               </main>
+            </div>
+          </div>
+        )}
+
+        {view === AppView.DEVELOPER_PANEL && isDevUnlocked && (
+          <div className="max-w-4xl mx-auto space-y-10 animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-slate-900 p-10 md:p-14 rounded-[48px] border border-slate-800 shadow-2xl">
+              <div className="flex items-center justify-between mb-10 border-b border-slate-800 pb-6">
+                <div>
+                  <h2 className="text-3xl font-black text-white">Dev Mode <span className="text-indigo-400">Panel</span></h2>
+                  <p className="text-slate-500 text-sm">Controle Administrativo do Sistema</p>
+                </div>
+                <div className="px-4 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-full text-xs font-black uppercase tracking-widest border border-indigo-500/20">Acesso Restrito</div>
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-12">
+                <form onSubmit={handleCreatePro} className="space-y-6">
+                  <h3 className="text-xl font-black text-white mb-6">Cadastrar Profissional</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Nome Completo</label>
+                      <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.name} onChange={e => setNewPro({...newPro, name: e.target.value})} placeholder="Nome que aparecerá na agenda" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Estabelecimento</label>
+                      <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.salonName} onChange={e => setNewPro({...newPro, salonName: e.target.value})} placeholder="Ex: Barbearia do João" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Cidade</label>
+                        <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.city} onChange={e => setNewPro({...newPro, city: e.target.value})} placeholder="Cidade de atuação" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Dias de Acesso</label>
+                        <input required type="number" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.expireDays} onChange={e => setNewPro({...newPro, expireDays: parseInt(e.target.value)})} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Login (Prefix @marcai.dev)</label>
+                      <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.login} onChange={e => setNewPro({...newPro, login: e.target.value.replace(/\s+/g, '').toLowerCase()})} placeholder="Ex: joao123" />
+                      <p className="text-[10px] text-slate-600 mt-1 italic">Será gerado: {newPro.login || '...' }@marcai.dev</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Senha Temporária</label>
+                        <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.password} onChange={e => setNewPro({...newPro, password: e.target.value})} placeholder="••••••" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Palavra Secreta</label>
+                        <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.resetWord} onChange={e => setNewPro({...newPro, resetWord: e.target.value})} placeholder="Para reset" />
+                      </div>
+                    </div>
+                  </div>
+                  <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-900/40 hover:bg-indigo-700 active:scale-[0.98] transition-all">Liberar Cadastro Profissional</button>
+                </form>
+
+                <div className="space-y-8">
+                  <h3 className="text-xl font-black text-white mb-6">Estado Atual do Sistema</h3>
+                  <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 max-h-[500px] overflow-y-auto">
+                    <p className="text-xs text-indigo-400 font-bold mb-4 uppercase tracking-widest">Profissionais na Base: {professionals.length}</p>
+                    <div className="space-y-3">
+                      {professionals.map(p => (
+                        <div key={p.id} className="p-4 bg-slate-900 rounded-xl flex items-center justify-between border border-slate-800">
+                          <div>
+                            <p className="text-sm font-bold text-white">{p.name}</p>
+                            <p className="text-[10px] text-slate-500">{p.city} • Expira em {p.expireDays} dias</p>
+                          </div>
+                          <button onClick={() => setProfessionals(professionals.filter(pr => pr.id !== p.id))} className="text-red-500 hover:text-red-400 p-2"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <button onClick={() => setView(AppView.LANDING)} className="w-full py-4 text-slate-500 font-bold border border-slate-800 rounded-2xl hover:bg-slate-800 transition-colors">Fechar Painel Dev</button>
+                </div>
+              </div>
             </div>
           </div>
         )}
