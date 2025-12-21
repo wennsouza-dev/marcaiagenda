@@ -21,6 +21,7 @@ const App: React.FC = () => {
   // Dev Mode Security
   const [devPasswordInput, setDevPasswordInput] = useState('');
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
+  const [editingProId, setEditingProId] = useState<string | null>(null);
 
   // Cadastro Profissional Dev
   const [newPro, setNewPro] = useState({
@@ -64,7 +65,7 @@ const App: React.FC = () => {
   const fetchProfessionals = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('professionals').select('*');
+      const { data, error } = await supabase.from('professionals').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       if (data) {
         setProfessionals(data.map((p: any) => ({ 
@@ -127,36 +128,72 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreatePro = (e: React.FormEvent) => {
+  const handleCreatePro = async (e: React.FormEvent) => {
     e.preventDefault();
-    const slug = newPro.login.toLowerCase();
-    const createdPro: Professional = {
-      id: Math.random().toString(36).substr(2, 9),
-      slug: slug,
-      name: newPro.name,
-      salonName: newPro.salonName,
-      city: newPro.city,
-      category: 'Geral',
-      bio: '',
-      imageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-      rating: 5.0,
-      services: [{ id: 's1', name: 'Corte Tradicional', price: 50, duration: 30 }],
-      expireDays: newPro.expireDays,
-      resetWord: newPro.resetWord,
-      whatsapp: '',
-      address: ''
-    };
-    
-    setProfessionals([createdPro, ...professionals]);
-    alert(`Profissional cadastrado com sucesso!\nLogin: ${slug}@marcai.dev\nSenha: ${newPro.password}`);
-    setNewPro({ name: '', salonName: '', city: '', login: '', expireDays: 30, password: '', resetWord: '' });
+    setLoading(true);
+    try {
+      const slug = newPro.login.toLowerCase();
+      const proData = {
+        slug: slug,
+        name: newPro.name,
+        salon_name: newPro.salonName,
+        city: newPro.city,
+        expire_days: newPro.expireDays,
+        reset_word: newPro.resetWord,
+        category: 'Barbearia', // Padrão para novos
+        image_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
+        services: []
+      };
+
+      if (editingProId) {
+        const { error } = await supabase.from('professionals').update(proData).eq('id', editingProId);
+        if (error) throw error;
+        alert("Profissional atualizado com sucesso!");
+      } else {
+        const { error } = await supabase.from('professionals').insert([proData]);
+        if (error) throw error;
+        alert(`Profissional cadastrado com sucesso!\nLogin: ${slug}@marcai.dev`);
+      }
+
+      setNewPro({ name: '', salonName: '', city: '', login: '', expireDays: 30, password: '', resetWord: '' });
+      setEditingProId(null);
+      await fetchProfessionals();
+    } catch (err: any) {
+      alert("Erro ao salvar: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditPro = (p: Professional) => {
+    setEditingProId(p.id);
+    setNewPro({
+      name: p.name,
+      salonName: p.salonName || '',
+      city: p.city,
+      login: p.slug,
+      expireDays: p.expireDays || 30,
+      password: '*****',
+      resetWord: p.resetWord || ''
+    });
+  };
+
+  const handleDeletePro = async (id: string) => {
+    if (confirm("Deseja realmente excluir permanentemente este profissional do banco de dados?")) {
+      try {
+        const { error } = await supabase.from('professionals').delete().eq('id', id);
+        if (error) throw error;
+        await fetchProfessionals();
+      } catch (err: any) {
+        alert("Erro ao excluir: " + err.message);
+      }
+    }
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Simulação de busca por e-mail (slug@marcai.dev)
     const proFound = professionals.find(p => `${p.slug}@marcai.dev` === email.toLowerCase().trim());
 
     setTimeout(() => {
@@ -173,7 +210,7 @@ const App: React.FC = () => {
     }, 800);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && loggedProfessional) {
       const reader = new FileReader();
@@ -184,17 +221,28 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveProfileChanges = () => {
+  const handleSaveProfileChanges = async () => {
     if (!loggedProfessional) return;
     setLoading(true);
 
-    // Atualiza o profissional logado na lista principal
-    setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? loggedProfessional : p));
+    try {
+      const { error } = await supabase.from('professionals').update({
+        name: loggedProfessional.name,
+        whatsapp: loggedProfessional.whatsapp,
+        address: loggedProfessional.address,
+        image_url: loggedProfessional.imageUrl,
+        services: loggedProfessional.services
+      }).eq('id', loggedProfessional.id);
 
-    setTimeout(() => {
-      setLoading(false);
+      if (error) throw error;
+      
+      setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? loggedProfessional : p));
       alert("Alterações salvas com sucesso!");
-    }, 600);
+    } catch (err: any) {
+      alert("Erro ao salvar no banco: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenServiceForm = (service?: Service) => {
@@ -573,11 +621,10 @@ const App: React.FC = () => {
                            ))}
                         </div>
                       </div>
-                      <button onClick={handleSaveProfileChanges} className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-xl shadow-indigo-100 transition-all active:scale-[0.98]">Salvar Alterações</button>
+                      <button onClick={handleSaveProfileChanges} className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-xl shadow-indigo-100 transition-all active:scale-[0.98]">{loading ? "Salvando..." : "Salvar Alterações"}</button>
                     </div>
                   </div>
                 )}
-                {/* Outras abas simplificadas... */}
               </main>
             </div>
           </div>
@@ -611,12 +658,12 @@ const App: React.FC = () => {
                     <h2 className="text-3xl font-black text-white">Dev Mode <span className="text-indigo-400">Admin</span></h2>
                     <p className="text-slate-500 text-sm">Gerenciamento de Instâncias e Licenças</p>
                   </div>
-                  <button onClick={() => setIsDevUnlocked(false)} className="text-slate-500 hover:text-white transition-colors"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg></button>
+                  <button onClick={() => {setIsDevUnlocked(false); setEditingProId(null); setNewPro({ name: '', salonName: '', city: '', login: '', expireDays: 30, password: '', resetWord: '' });}} className="text-slate-500 hover:text-white transition-colors"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg></button>
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-12">
                   <form onSubmit={handleCreatePro} className="space-y-6">
-                    <h3 className="text-xl font-black text-white mb-6">Novo Profissional</h3>
+                    <h3 className="text-xl font-black text-white mb-6">{editingProId ? "Editar Profissional" : "Novo Profissional"}</h3>
                     <div className="grid grid-cols-1 gap-4">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Nome Completo</label>
@@ -632,29 +679,41 @@ const App: React.FC = () => {
                           <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.city} onChange={e => setNewPro({...newPro, city: e.target.value})} />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Dias</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Dias Licença</label>
                           <input required type="number" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.expireDays} onChange={e => setNewPro({...newPro, expireDays: parseInt(e.target.value)})} />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Login (E-mail prefixo)</label>
-                        <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.login} onChange={e => setNewPro({...newPro, login: e.target.value.toLowerCase().trim()})} placeholder="Ex: joao" />
-                        <p className="text-[10px] text-indigo-400 italic">Gera: {newPro.login || '...' }@marcai.dev</p>
+                        <input required type="text" disabled={!!editingProId} className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500 disabled:opacity-50" value={newPro.login} onChange={e => setNewPro({...newPro, login: e.target.value.toLowerCase().trim()})} placeholder="Ex: joao" />
+                        {!editingProId && <p className="text-[10px] text-indigo-400 italic">Gera: {newPro.login || '...' }@marcai.dev</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Palavra Secreta (Reset Senha)</label>
+                        <input required type="text" className="w-full bg-slate-800 border-none rounded-2xl px-5 py-3 text-white focus:ring-2 focus:ring-indigo-500" value={newPro.resetWord} onChange={e => setNewPro({...newPro, resetWord: e.target.value})} placeholder="Ex: amora" />
                       </div>
                     </div>
-                    <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-900/40 hover:bg-indigo-700">Criar Conta Professional</button>
+                    <button disabled={loading} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-900/40 hover:bg-indigo-700 transition-all disabled:opacity-50">
+                      {loading ? "Processando..." : (editingProId ? "Salvar Alterações" : "Criar Conta Professional")}
+                    </button>
+                    {editingProId && (
+                      <button type="button" onClick={() => {setEditingProId(null); setNewPro({ name: '', salonName: '', city: '', login: '', expireDays: 30, password: '', resetWord: '' });}} className="w-full py-2 text-slate-500 text-xs uppercase font-bold">Cancelar Edição</button>
+                    )}
                   </form>
 
                   <div className="space-y-8">
                     <h3 className="text-xl font-black text-white">Instâncias Ativas</h3>
                     <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 max-h-[400px] overflow-y-auto space-y-3">
                       {professionals.length > 0 ? professionals.map(p => (
-                        <div key={p.id} className="p-4 bg-slate-900 rounded-xl flex items-center justify-between border border-slate-800">
-                          <div>
+                        <div key={p.id} className="p-4 bg-slate-900 rounded-xl flex items-center justify-between border border-slate-800 group">
+                          <div className="flex-1">
                             <p className="text-sm font-bold text-white">{p.name}</p>
                             <p className="text-[10px] text-slate-500">{p.slug}@marcai.dev • {p.expireDays} dias</p>
                           </div>
-                          <button onClick={() => setProfessionals(professionals.filter(pr => pr.id !== p.id))} className="text-red-500 p-2 hover:bg-red-500/10 rounded-lg"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                          <div className="flex gap-1">
+                            <button onClick={() => handleEditPro(p)} className="text-indigo-400 p-2 hover:bg-indigo-500/10 rounded-lg transition-colors" title="Editar"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                            <button onClick={() => handleDeletePro(p.id)} className="text-red-500 p-2 hover:bg-red-500/10 rounded-lg transition-colors" title="Excluir"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                          </div>
                         </div>
                       )) : <p className="text-slate-600 text-center py-8">Nenhuma instância ativa.</p>}
                     </div>
