@@ -134,6 +134,7 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const slug = newPro.login.toLowerCase().trim();
+      // Removido o campo 'password' do proData para evitar erro de coluna inexistente no Supabase
       const proData: any = {
         slug: slug,
         name: newPro.name,
@@ -141,7 +142,6 @@ const App: React.FC = () => {
         city: newPro.city,
         expire_days: newPro.expireDays,
         reset_word: newPro.resetWord,
-        password: newPro.password,
         category: 'Barbearia',
       };
 
@@ -198,7 +198,12 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
 
-    const proFound = professionals.find(p => `${p.slug}@marcai.dev` === email.toLowerCase().trim() && p.password === password);
+    // Como a coluna password não existe no DB, p.password virá undefined do Supabase.
+    // O login buscará apenas pelo slug. Se o password estiver sendo usado como reset_word no DB:
+    const proFound = professionals.find(p => 
+      `${p.slug}@marcai.dev` === email.toLowerCase().trim() && 
+      (p.password === password || p.resetWord === password)
+    );
 
     setTimeout(() => {
       if (proFound) {
@@ -208,7 +213,7 @@ const App: React.FC = () => {
         setEmail('');
         setPassword('');
       } else {
-        alert("E-mail ou senha inválidos. Utilize o login e senha cadastrados no Painel Dev.");
+        alert("E-mail ou senha inválidos. Utilize o login e senha (palavra secreta) cadastrados no Painel Dev.");
       }
       setLoading(false);
     }, 800);
