@@ -6,6 +6,18 @@ import { Professional, AppView, Service, Appointment } from './types.ts';
 import { supabase } from './lib/supabase.ts';
 
 const App: React.FC = () => {
+  // Constantes para estado inicial limpo (novo usuário)
+  const INITIAL_WEEKLY_HOURS = [
+    { day: 'Segunda', active: false, from: '09:00', to: '18:00' },
+    { day: 'Terça', active: false, from: '09:00', to: '18:00' },
+    { day: 'Quarta', active: false, from: '09:00', to: '18:00' },
+    { day: 'Quinta', active: false, from: '09:00', to: '18:00' },
+    { day: 'Sexta', active: false, from: '09:00', to: '18:00' },
+    { day: 'Sábado', active: false, from: '09:00', to: '12:00' },
+    { day: 'Domingo', active: false, from: '09:00', to: '12:00' },
+  ];
+  const INITIAL_LUNCH_BREAK = { enabled: false, from: '12:00', to: '13:00' };
+
   // Função auxiliar para obter a data/hora atual de Brasília
   const getBrasiliaNow = () => {
     const now = new Date();
@@ -83,29 +95,16 @@ const App: React.FC = () => {
   // Estados do Dashboard
   const [dashTab, setDashTab] = useState<'appointments' | 'pre_bookings' | 'profile' | 'hours' | 'gallery'>('appointments');
   
-  // Agendamentos em memória (Para o MVP)
-  const [appointments, setAppointments] = useState<Appointment[]>([
-    { id: '1', professionalId: 'mock-1', clientName: 'Ricardo Silva', clientPhone: '32988729033', serviceName: 'Corte Degradê', date: '2023-12-25', time: '14:30', status: 'confirmed' }
-  ]);
-  const [preBookings, setPreBookings] = useState<Appointment[]>([
-    { id: '3', professionalId: 'mock-1', clientName: 'Marcos Oliveira', clientPhone: '32988729033', serviceName: 'Barba e Toalha Quente', date: '2023-12-26', time: '10:00', status: 'pending' }
-  ]);
+  // Agendamentos em memória (Iniciam vazios para evitar replicação/vazamento entre perfis)
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [preBookings, setPreBookings] = useState<Appointment[]>([]);
 
   // Configuração de orientação de pré-agendamento
   const [preBookingOrientation, setPreBookingOrientation] = useState('Para garantir seu horário, solicitamos o pagamento antecipado de 50% do valor via PIX. Por favor, envie o comprovante para confirmar.');
 
   // Estados de Horários
-  const [weeklyHours, setWeeklyHours] = useState([
-    { day: 'Segunda', active: true, from: '09:00', to: '18:00' },
-    { day: 'Terça', active: true, from: '09:00', to: '18:00' },
-    { day: 'Quarta', active: true, from: '09:00', to: '18:00' },
-    { day: 'Quinta', active: true, from: '09:00', to: '18:00' },
-    { day: 'Sexta', active: true, from: '09:00', to: '18:00' },
-    { day: 'Sábado', active: false, from: '09:00', to: '12:00' },
-    { day: 'Domingo', active: false, from: '09:00', to: '12:00' },
-  ]);
-
-  const [lunchBreak, setLunchBreak] = useState({ enabled: true, from: '12:00', to: '13:00' });
+  const [weeklyHours, setWeeklyHours] = useState(INITIAL_WEEKLY_HOURS);
+  const [lunchBreak, setLunchBreak] = useState(INITIAL_LUNCH_BREAK);
   const [specialDates, setSpecialDates] = useState<{ id: string; date: string; closed: boolean; from?: string; to?: string }[]>([]);
   const [showSpecialDateForm, setShowSpecialDateForm] = useState(false);
   const [newSpecialDate, setNewSpecialDate] = useState({ date: '', closed: false, from: '09:00', to: '18:00' });
@@ -193,9 +192,16 @@ const App: React.FC = () => {
     if (newView === AppView.LANDING) {
       // Limpa a URL ao voltar para o início
       window.history.replaceState({}, '', window.location.origin + window.location.pathname);
+      
+      // Reset total de estados ao sair para garantir que o próximo login venha limpo
       if (isLoggedIn) {
         setIsLoggedIn(false);
         setLoggedProfessional(null);
+        setWeeklyHours(INITIAL_WEEKLY_HOURS);
+        setLunchBreak(INITIAL_LUNCH_BREAK);
+        setSpecialDates([]);
+        setAppointments([]);
+        setPreBookings([]);
       }
     }
     setView(newView);
@@ -285,8 +291,15 @@ const App: React.FC = () => {
 
     setTimeout(() => {
       if (proFound) {
+        // Antes de carregar o novo profissional, resetamos os estados residuais
+        setWeeklyHours(INITIAL_WEEKLY_HOURS);
+        setLunchBreak(INITIAL_LUNCH_BREAK);
+        setSpecialDates([]);
+        setAppointments([]);
+        setPreBookings([]);
+
         setLoggedProfessional(proFound);
-        // Carrega configurações de horários salvas no banco ou usa os defaults
+        // Carrega configurações de horários salvas no banco ou usa os defaults limpos
         if (proFound.businessHours) {
           const { weekly, lunch, special } = proFound.businessHours as any;
           if (weekly) setWeeklyHours(weekly);
@@ -298,7 +311,7 @@ const App: React.FC = () => {
         setEmail('');
         setPassword('');
       } else {
-        alert("E-mail ou senha inválidos. Utilize o login e senha (palavra secreta) cadastrados no Painel Dev.");
+        alert("E-mail ou senha inválidos.");
       }
       setLoading(false);
     }, 800);
@@ -558,16 +571,8 @@ const App: React.FC = () => {
 
     // Obtém as configurações do profissional selecionado (para evitar usar estados compartilhados de login)
     const config = selectedProfessional.businessHours || { 
-      weekly: [
-        { day: 'Segunda', active: true, from: '09:00', to: '18:00' },
-        { day: 'Terça', active: true, from: '09:00', to: '18:00' },
-        { day: 'Quarta', active: true, from: '09:00', to: '18:00' },
-        { day: 'Quinta', active: true, from: '09:00', to: '18:00' },
-        { day: 'Sexta', active: true, from: '09:00', to: '18:00' },
-        { day: 'Sábado', active: false, from: '09:00', to: '12:00' },
-        { day: 'Domingo', active: false, from: '09:00', to: '12:00' },
-      ], 
-      lunch: { enabled: true, from: '12:00', to: '13:00' }, 
+      weekly: INITIAL_WEEKLY_HOURS, 
+      lunch: INITIAL_LUNCH_BREAK, 
       special: [] 
     };
     const { weekly, lunch, special } = config;
@@ -886,7 +891,7 @@ const App: React.FC = () => {
                     <h3 className="text-2xl font-black text-slate-900">Próximos Agendamentos</h3>
                     <div className="grid gap-4">
                       {appointments
-                        .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
+                        .filter(a => a.professionalId === loggedProfessional.id) // Filtro rigoroso: apenas do profissional logado
                         .map(a => (
                         <div key={a.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between group gap-6">
                           <div className="flex items-center gap-4 w-full">
@@ -920,8 +925,8 @@ const App: React.FC = () => {
                           </div>
                         </div>
                       ))}
-                      {appointments.filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1').length === 0 && (
-                        <p className="text-center text-slate-400 py-12">Nenhum agendamento para este profissional.</p>
+                      {appointments.filter(a => a.professionalId === loggedProfessional.id).length === 0 && (
+                        <p className="text-center text-slate-400 py-12 font-medium">Nenhum agendamento para sua conta.</p>
                       )}
                     </div>
                   </div>
@@ -949,7 +954,7 @@ const App: React.FC = () => {
 
                     <div className="grid gap-4">
                       {preBookings
-                        .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
+                        .filter(a => a.professionalId === loggedProfessional.id) // Filtro rigoroso: apenas do profissional logado
                         .map(a => (
                         <div key={a.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
                           <div className="flex items-center gap-4 w-full">
@@ -971,8 +976,8 @@ const App: React.FC = () => {
                           </div>
                         </div>
                       ))}
-                      {preBookings.filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1').length === 0 && (
-                        <div className="py-12 text-center text-slate-400 font-medium">Nenhum pré-agendamento pendente.</div>
+                      {preBookings.filter(a => a.professionalId === loggedProfessional.id).length === 0 && (
+                        <div className="py-12 text-center text-slate-400 font-medium">Nenhum pré-agendamento pendente para sua conta.</div>
                       )}
                     </div>
                   </div>
@@ -1057,7 +1062,7 @@ const App: React.FC = () => {
                           <div className="w-8 h-8 bg-slate-800 text-indigo-400 rounded-lg flex items-center justify-center"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
                           <h4 className="font-black text-white text-lg">Horários Especiais</h4>
                         </div>
-                        <button onClick={() => setShowSpecialDateForm(!showSpecialDateForm)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-colors">
+                        <button onClick={() => setShowSpecialDateForm(!showSpecialDateForm)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors">
                           {showSpecialDateForm ? 'Cancelar' : '+ Adicionar Data'}
                         </button>
                       </div>
