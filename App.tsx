@@ -338,14 +338,22 @@ const App: React.FC = () => {
         whatsapp: loggedProfessional.whatsapp,
         address: loggedProfessional.address,
         image_url: loggedProfessional.imageUrl,
-        services: loggedProfessional.services
+        services: loggedProfessional.services,
+        bio: loggedProfessional.bio,
+        salon_name: loggedProfessional.salonName
       }).eq('id', loggedProfessional.id);
 
       if (error) throw error;
       
       // Sincroniza a lista global de profissionais para que a aba de agendamento veja as mudanças
       setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? { ...loggedProfessional } : p));
-      alert("Alterações salvas com sucesso!");
+      
+      // Sincroniza o perfil selecionado (Cliente) para refletir a nova foto/serviços instantaneamente
+      if (selectedProfessional?.id === loggedProfessional.id) {
+        setSelectedProfessional({ ...loggedProfessional });
+      }
+
+      alert("Alterações de perfil salvas com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar no banco: " + err.message);
     } finally {
@@ -373,8 +381,11 @@ const App: React.FC = () => {
       } else {
         const updatedPro = { ...loggedProfessional, businessHours: businessHoursConfig };
         setLoggedProfessional(updatedPro);
-        // Sincroniza a lista global de profissionais para que a aba de agendamento veja as mudanças de horários
+        // Sincroniza a lista global e o perfil selecionado para o cliente
         setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? updatedPro : p));
+        if (selectedProfessional?.id === loggedProfessional.id) {
+          setSelectedProfessional(updatedPro);
+        }
         alert("Configurações de horários salvas com sucesso!");
       }
     } catch (err: any) {
@@ -719,7 +730,7 @@ const App: React.FC = () => {
 
                <div className="p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
                  <img 
-                    src={selectedProfessional.imageUrl} 
+                    src={selectedProfessional.imageUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop'} 
                     className="w-40 h-40 md:w-56 md:h-56 rounded-[48px] object-cover shadow-2xl border-4 border-white" 
                     alt={selectedProfessional.name} 
                   />
@@ -727,7 +738,7 @@ const App: React.FC = () => {
                     <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 inline-block">{selectedProfessional.category}</span>
                     <h1 className="text-4xl font-black text-slate-900 mb-2">{selectedProfessional.name}</h1>
                     {selectedProfessional.salonName && <p className="text-slate-400 font-bold uppercase tracking-tight text-sm mb-4">{selectedProfessional.salonName}</p>}
-                    <p className="text-slate-600 max-w-lg mb-6">{selectedProfessional.bio || "Agende seu horário com os melhores profissionais."}</p>
+                    <p className="text-slate-600 max-w-lg mb-6">{selectedProfessional.bio || "Especialista pronto para te atender com excelência e cuidado."}</p>
                     
                     <div className="flex flex-col gap-3">
                       {selectedProfessional.address && (
@@ -1169,13 +1180,37 @@ const App: React.FC = () => {
                           />
                         </div>
                       </div>
+
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Nome do Estabelecimento</label>
+                          <input 
+                            type="text" 
+                            className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500" 
+                            value={loggedProfessional.salonName || ''} 
+                            onChange={e => setLoggedProfessional({...loggedProfessional, salonName: e.target.value})}
+                            placeholder="Ex: Barbearia VIP"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Endereço Completo</label>
+                          <input 
+                            type="text" 
+                            className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500" 
+                            value={loggedProfessional.address || ''} 
+                            onChange={e => setLoggedProfessional({...loggedProfessional, address: e.target.value})}
+                            placeholder="Rua, Número, Bairro"
+                          />
+                        </div>
+                      </div>
+
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Endereço (Exibido no perfil)</label>
-                        <input 
-                          type="text" 
-                          className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500" 
-                          value={loggedProfessional.address || ''} 
-                          onChange={e => setLoggedProfessional({...loggedProfessional, address: e.target.value})}
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Sua Bio (Apresentação)</label>
+                        <textarea 
+                          className="w-full bg-slate-50 border-none rounded-[20px] px-6 py-4 font-medium outline-none focus:ring-2 focus:ring-indigo-500 h-24 transition-all" 
+                          value={loggedProfessional.bio || ''} 
+                          onChange={e => setLoggedProfessional({...loggedProfessional, bio: e.target.value})}
+                          placeholder="Fale um pouco sobre você e seus diferenciais..."
                         />
                       </div>
                       
