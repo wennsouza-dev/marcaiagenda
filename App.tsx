@@ -44,10 +44,10 @@ const App: React.FC = () => {
   // Estados do Dashboard
   const [dashTab, setDashTab] = useState<'appointments' | 'pre_bookings' | 'profile' | 'hours' | 'gallery'>('appointments');
   const [appointments, setAppointments] = useState<any[]>([
-    { id: '1', clientName: 'Ricardo Silva', serviceName: 'Corte Degradê', time: '14:30', status: 'confirmed' }
+    { id: '1', professionalId: 'mock-1', clientName: 'Ricardo Silva', serviceName: 'Corte Degradê', time: '14:30', status: 'confirmed' }
   ]);
   const [preBookings, setPreBookings] = useState<any[]>([
-    { id: '3', clientName: 'Marcos Oliveira', serviceName: 'Barba e Toalha Quente', time: '10:00', status: 'pending' }
+    { id: '3', professionalId: 'mock-1', clientName: 'Marcos Oliveira', serviceName: 'Barba e Toalha Quente', time: '10:00', status: 'pending' }
   ]);
 
   // Dados do Cliente (Agendamento)
@@ -134,7 +134,6 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const slug = newPro.login.toLowerCase().trim();
-      // Removido o campo 'password' do proData para evitar erro de coluna inexistente no Supabase
       const proData: any = {
         slug: slug,
         name: newPro.name,
@@ -178,7 +177,6 @@ const App: React.FC = () => {
       password: p.password || '',
       resetWord: p.resetWord || ''
     });
-    // Rola para o topo do formulário
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -198,8 +196,6 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
 
-    // Como a coluna password não existe no DB, p.password virá undefined do Supabase.
-    // O login buscará apenas pelo slug. Se o password estiver sendo usado como reset_word no DB:
     const proFound = professionals.find(p => 
       `${p.slug}@marcai.dev` === email.toLowerCase().trim() && 
       (p.password === password || p.resetWord === password)
@@ -307,7 +303,27 @@ const App: React.FC = () => {
     const message = `Olá ${selectedProfessional.name}, gostaria de agendar: *${selectedService.name}* para o dia *${dateFormatted}* às *${selectedTime}*. Meu nome é ${clientName}. Está confirmado?`;
     const whatsappUrl = `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(message)}`;
     
+    // NOVO: Adicionar ao estado global de agendamentos para aparecer no painel do profissional
+    const newAppointment = {
+      id: Math.random().toString(36).substr(2, 9),
+      professionalId: selectedProfessional.id,
+      clientName: clientName,
+      serviceName: selectedService.name,
+      time: selectedTime,
+      date: selectedDate,
+      status: 'confirmed'
+    };
+    
+    setAppointments(prev => [newAppointment, ...prev]);
+
     window.open(whatsappUrl, '_blank');
+    
+    // Limpar estados do formulário
+    setClientName('');
+    setClientPhone('');
+    setSelectedService(null);
+    setSelectedTime(null);
+    
     setView(AppView.CLIENTS);
   };
 
@@ -407,7 +423,6 @@ const App: React.FC = () => {
                     {selectedProfessional.salonName && <p className="text-slate-400 font-bold uppercase tracking-tight text-sm mb-4">{selectedProfessional.salonName}</p>}
                     <p className="text-slate-600 max-w-lg mb-6">{selectedProfessional.bio || "Agende seu horário com os melhores profissionais."}</p>
                     
-                    {/* Informações de Contato e Endereço no Perfil */}
                     <div className="flex flex-col gap-3">
                       {selectedProfessional.address && (
                         <a 
@@ -552,7 +567,9 @@ const App: React.FC = () => {
                   <div className="space-y-6">
                     <h3 className="text-2xl font-black text-slate-900">Próximos Agendamentos</h3>
                     <div className="grid gap-4">
-                      {appointments.map(a => (
+                      {appointments
+                        .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
+                        .map(a => (
                         <div key={a.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-600">{a.clientName[0]}</div>
@@ -563,12 +580,15 @@ const App: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-6">
                             <div className="text-right">
-                              <p className="text-sm font-black text-indigo-600">Hoje, {a.time}</p>
+                              <p className="text-sm font-black text-indigo-600">{a.date === new Date().toISOString().split('T')[0] ? 'Hoje' : a.date}, {a.time}</p>
                             </div>
                             <button onClick={() => handleDeleteAppointment(a.id, false)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                           </div>
                         </div>
                       ))}
+                      {appointments.filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1').length === 0 && (
+                        <p className="text-center text-slate-400 py-12">Nenhum agendamento para este profissional.</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -577,7 +597,11 @@ const App: React.FC = () => {
                   <div className="space-y-6">
                     <h3 className="text-2xl font-black text-slate-900">Pré-agendamentos</h3>
                     <div className="grid gap-4">
-                      {preBookings.length > 0 ? preBookings.map(a => (
+                      {preBookings
+                        .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
+                        .length > 0 ? preBookings
+                        .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
+                        .map(a => (
                         <div key={a.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center font-bold text-amber-600">{a.clientName[0]}</div>
