@@ -146,7 +146,7 @@ const App: React.FC = () => {
           expireDays: p.expire_days,
           resetWord: p.reset_word,
           password: p.password,
-          business_hours: p.business_hours // Carrega as configurações de horários do banco
+          businessHours: p.business_hours // Carrega as configurações de horários do banco
         })));
       }
     } catch (err) {
@@ -266,9 +266,9 @@ const App: React.FC = () => {
     setTimeout(() => {
       if (proFound) {
         setLoggedProfessional(proFound);
-        // Carrega configurações de horários salvas no banco
-        if (proFound.business_hours) {
-          const { weekly, lunch, special } = proFound.business_hours as any;
+        // Carrega configurações de horários salvas no banco ou usa os defaults
+        if (proFound.businessHours) {
+          const { weekly, lunch, special } = proFound.businessHours as any;
           if (weekly) setWeeklyHours(weekly);
           if (lunch) setLunchBreak(lunch);
           if (special) setSpecialDates(special);
@@ -335,13 +335,21 @@ const App: React.FC = () => {
         business_hours: businessHoursConfig
       }).eq('id', loggedProfessional.id);
 
-      if (error) throw error;
-      
-      // Atualiza o estado local do profissional
-      setLoggedProfessional({ ...loggedProfessional, business_hours: businessHoursConfig });
-      alert("Configurações de horários salvas com sucesso!");
+      if (error) {
+        // Tratamento específico para coluna inexistente
+        if (error.message.includes("column") && error.message.includes("not found")) {
+          console.error("ERRO DE SCHEMA:", error.message);
+          alert("ERRO TÉCNICO: A coluna 'business_hours' não existe na tabela 'professionals'.\n\nCOMO RESOLVER:\nNo painel do Supabase, vá em 'SQL Editor' e execute:\nALTER TABLE professionals ADD COLUMN business_hours JSONB;");
+        } else {
+          throw error;
+        }
+      } else {
+        // Atualiza o estado local do profissional
+        setLoggedProfessional({ ...loggedProfessional, businessHours: businessHoursConfig });
+        alert("Configurações de horários salvas com sucesso!");
+      }
     } catch (err: any) {
-      alert("Erro ao salvar horários: " + err.message);
+      alert("Erro inesperado ao salvar horários: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -831,6 +839,7 @@ const App: React.FC = () => {
                               {a.status !== 'cancelled' && a.status !== 'concluded' && (
                                 <>
                                   <button onClick={() => handleCancelAppointment(a.id)} className="px-3 py-2 bg-orange-50 text-orange-600 text-[10px] font-black uppercase rounded-xl hover:bg-orange-600 hover:text-white transition-all">Cancelar</button>
+                                  {/* FIXED: Removed incorrect 'id:' label in function call */}
                                   <button onClick={() => handleCompleteAppointment(a.id)} className="px-3 py-2 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-xl hover:bg-emerald-600 hover:text-white transition-all">Concluir</button>
                                 </>
                               )}

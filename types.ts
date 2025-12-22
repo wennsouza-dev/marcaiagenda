@@ -26,7 +26,7 @@ export interface Professional {
   address?: string;
   customLink?: string;
   password?: string;
-  business_hours?: any; // Configurações de expediente, almoço e datas especiais
+  businessHours?: any; // Configurações de expediente, almoço e datas especiais
 }
 
 export interface Appointment {
