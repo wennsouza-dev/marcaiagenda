@@ -330,7 +330,8 @@ const App: React.FC = () => {
 
       if (error) throw error;
       
-      setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? loggedProfessional : p));
+      // Sincroniza a lista global de profissionais para que a aba de agendamento veja as mudanças
+      setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? { ...loggedProfessional } : p));
       alert("Alterações salvas com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar no banco: " + err.message);
@@ -355,18 +356,16 @@ const App: React.FC = () => {
       }).eq('id', loggedProfessional.id);
 
       if (error) {
-        if (error.message.includes("column") && error.message.includes("not found")) {
-          console.error("ERRO DE SCHEMA:", error.message);
-          alert("ERRO TÉCNICO: A coluna 'business_hours' não existe na tabela 'professionals'.\n\nCOMO RESOLVER:\nNo painel do Supabase, vá em 'SQL Editor' e execute:\nALTER TABLE professionals ADD COLUMN business_hours JSONB;");
-        } else {
-          throw error;
-        }
+        throw error;
       } else {
-        setLoggedProfessional({ ...loggedProfessional, businessHours: businessHoursConfig });
+        const updatedPro = { ...loggedProfessional, businessHours: businessHoursConfig };
+        setLoggedProfessional(updatedPro);
+        // Sincroniza a lista global de profissionais para que a aba de agendamento veja as mudanças de horários
+        setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? updatedPro : p));
         alert("Configurações de horários salvas com sucesso!");
       }
     } catch (err: any) {
-      alert("Erro inesperado ao salvar horários: " + err.message);
+      alert("Erro ao salvar horários: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -557,11 +556,19 @@ const App: React.FC = () => {
   const checkIsTimeAvailable = (time: string) => {
     if (!selectedProfessional) return false;
 
-    // Obtém as configurações do profissional selecionado (ou usa os padrões do estado local como fallback)
+    // Obtém as configurações do profissional selecionado (para evitar usar estados compartilhados de login)
     const config = selectedProfessional.businessHours || { 
-      weekly: weeklyHours, 
-      lunch: lunchBreak, 
-      special: specialDates 
+      weekly: [
+        { day: 'Segunda', active: true, from: '09:00', to: '18:00' },
+        { day: 'Terça', active: true, from: '09:00', to: '18:00' },
+        { day: 'Quarta', active: true, from: '09:00', to: '18:00' },
+        { day: 'Quinta', active: true, from: '09:00', to: '18:00' },
+        { day: 'Sexta', active: true, from: '09:00', to: '18:00' },
+        { day: 'Sábado', active: false, from: '09:00', to: '12:00' },
+        { day: 'Domingo', active: false, from: '09:00', to: '12:00' },
+      ], 
+      lunch: { enabled: true, from: '12:00', to: '13:00' }, 
+      special: [] 
     };
     const { weekly, lunch, special } = config;
 
@@ -576,7 +583,6 @@ const App: React.FC = () => {
     }
 
     // 2. Verificar Expediente Semanal (se não houver uma data especial definida)
-    // Parse da data selecionada garantindo que seja tratada como data local/meio-dia para pegar o dia da semana correto
     const [year, month, day] = selectedDate.split('-').map(Number);
     const dateObj = new Date(year, month - 1, day, 12, 0, 0);
     const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -584,10 +590,8 @@ const App: React.FC = () => {
     
     const weeklyDayConfig = weekly?.find((w: any) => w.day === currentDayName);
     
-    // Se o dia não estiver ativo no expediente semanal e não for uma data especial configurada como aberta
     if (!specialDay && (!weeklyDayConfig || !weeklyDayConfig.active)) return false;
 
-    // Validar se o horário está dentro da faixa de expediente (prioridade para customização de data especial)
     const activeFrom = specialDay?.from || weeklyDayConfig?.from || '09:00';
     const activeTo = specialDay?.to || weeklyDayConfig?.to || '18:00';
     if (time < activeFrom || time > activeTo) return false;
