@@ -17,6 +17,9 @@ const App: React.FC = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
   
   // Inicializa a data selecionada com a data CORRETA de Brasília (YYYY-MM-DD)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -119,17 +122,13 @@ const App: React.FC = () => {
   // Formulário de Serviço
   const [serviceForm, setServiceForm] = useState<Partial<Service> | null>(null);
 
-  // Estado de Avaliação
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
-
   const fetchProfessionals = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('professionals').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       if (data) {
-        setProfessionals(data.map((p: any) => ({ 
+        const mappedData = data.map((p: any) => ({ 
           id: p.id,
           slug: p.slug,
           name: p.name,
@@ -146,8 +145,10 @@ const App: React.FC = () => {
           expireDays: p.expire_days,
           resetWord: p.reset_word,
           password: p.password,
-          businessHours: p.business_hours // Carrega as configurações de horários do banco
-        })));
+          businessHours: p.business_hours
+        }));
+        setProfessionals(mappedData);
+        return mappedData;
       }
     } catch (err) {
       console.error(err);
@@ -157,7 +158,22 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchProfessionals();
+    const init = async () => {
+      const pros = await fetchProfessionals();
+      
+      // Lógica de Deep Linking: Verifica se há um profissional no link
+      const params = new URLSearchParams(window.location.search);
+      const proSlug = params.get('pro');
+      
+      if (proSlug && pros) {
+        const found = pros.find(p => p.slug === proSlug);
+        if (found) {
+          setSelectedProfessional(found);
+          setView(AppView.PROFESSIONAL_PROFILE);
+        }
+      }
+    };
+    init();
   }, []);
 
   const cities = useMemo(() => Array.from(new Set(professionals.map(p => p.city))).sort(), [professionals]);
@@ -174,9 +190,13 @@ const App: React.FC = () => {
   }, [professionals, search, cityFilter, categoryFilter]);
 
   const handleNavigate = (newView: AppView) => {
-    if (newView === AppView.LANDING && isLoggedIn) {
-      setIsLoggedIn(false);
-      setLoggedProfessional(null);
+    if (newView === AppView.LANDING) {
+      // Limpa a URL ao voltar para o início
+      window.history.replaceState({}, '', window.location.origin + window.location.pathname);
+      if (isLoggedIn) {
+        setIsLoggedIn(false);
+        setLoggedProfessional(null);
+      }
     }
     setView(newView);
   };
@@ -319,7 +339,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- LÓGICA DE SALVAR HORÁRIOS NO BANCO ---
   const handleSaveHours = async () => {
     if (!loggedProfessional) return;
     setLoading(true);
@@ -336,7 +355,6 @@ const App: React.FC = () => {
       }).eq('id', loggedProfessional.id);
 
       if (error) {
-        // Tratamento específico para coluna inexistente
         if (error.message.includes("column") && error.message.includes("not found")) {
           console.error("ERRO DE SCHEMA:", error.message);
           alert("ERRO TÉCNICO: A coluna 'business_hours' não existe na tabela 'professionals'.\n\nCOMO RESOLVER:\nNo painel do Supabase, vá em 'SQL Editor' e execute:\nALTER TABLE professionals ADD COLUMN business_hours JSONB;");
@@ -344,7 +362,6 @@ const App: React.FC = () => {
           throw error;
         }
       } else {
-        // Atualiza o estado local do profissional
         setLoggedProfessional({ ...loggedProfessional, businessHours: businessHoursConfig });
         alert("Configurações de horários salvas com sucesso!");
       }
@@ -525,7 +542,6 @@ const App: React.FC = () => {
   const nextDays = useMemo(() => {
     const days = [];
     const baseDate = getBrasiliaNow();
-    // Zera horas para evitar pulos indesejados no loop
     baseDate.setHours(0, 0, 0, 0);
 
     for (let i = 0; i < 15; i++) {
@@ -534,14 +550,13 @@ const App: React.FC = () => {
       days.push(d);
     }
     return days;
-  }, [brDateStr]); // Recalcula se a data de Brasília mudar
+  }, [brDateStr]);
 
   const timeSlots = ["09:00", "09:45", "10:30", "11:15", "14:00", "14:45", "15:30", "16:15", "17:00"];
 
   const checkIsTimeAvailable = (time: string) => {
     if (!selectedProfessional) return false;
 
-    // 1. Bloqueio por Horário de Brasília (Hoje)
     if (selectedDate === brDateStr) {
       const [h, m] = time.split(':').map(Number);
       const nowH = brTime.getHours();
@@ -550,7 +565,6 @@ const App: React.FC = () => {
       if (h === nowH && m <= nowM) return false;
     }
 
-    // 2. Bloqueio por Agendamento Existente (Confirmado ou Pendente)
     const isTaken = [...appointments, ...preBookings].some(a => 
       a.professionalId === selectedProfessional.id && 
       a.date === selectedDate && 
@@ -561,6 +575,17 @@ const App: React.FC = () => {
     if (isTaken) return false;
 
     return true;
+  };
+
+  // Gerador de Link do Profissional
+  const proPublicLink = useMemo(() => {
+    if (!loggedProfessional) return '';
+    return `${window.location.origin}${window.location.pathname}?pro=${loggedProfessional.slug}`;
+  }, [loggedProfessional]);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(proPublicLink);
+    alert("Link exclusivo copiado com sucesso! Agora você pode enviá-lo aos seus clientes.");
   };
 
   return (
@@ -630,7 +655,7 @@ const App: React.FC = () => {
 
         {view === AppView.PROFESSIONAL_PROFILE && selectedProfessional && (
            <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <button onClick={() => setView(AppView.CLIENTS)} className="mb-6 font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-2">
+             <button onClick={() => handleNavigate(AppView.CLIENTS)} className="mb-6 font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-2">
                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                Voltar
              </button>
@@ -777,7 +802,7 @@ const App: React.FC = () => {
                   <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-slate-50 border-none rounded-[24px] px-6 py-4 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                 </div>
                 <button className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all">Entrar no Painel</button>
-                <button type="button" onClick={() => setView(AppView.LANDING)} className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm">Voltar ao início</button>
+                <button type="button" onClick={() => handleNavigate(AppView.LANDING)} className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm">Voltar ao início</button>
               </form>
             </div>
           </div>
@@ -806,7 +831,7 @@ const App: React.FC = () => {
                 <button onClick={() => setDashTab('profile')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'profile' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Perfil e serviços</button>
                 <button onClick={() => setDashTab('hours')} className={`w-full text-left px-6 py-4 rounded-2xl font-bold transition-all ${dashTab === 'hours' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'}`}>Horários</button>
                 <div className="pt-8">
-                  <button onClick={() => setView(AppView.LANDING)} className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all">Sair</button>
+                  <button onClick={() => handleNavigate(AppView.LANDING)} className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all">Sair</button>
                 </div>
               </aside>
 
@@ -839,7 +864,6 @@ const App: React.FC = () => {
                               {a.status !== 'cancelled' && a.status !== 'concluded' && (
                                 <>
                                   <button onClick={() => handleCancelAppointment(a.id)} className="px-3 py-2 bg-orange-50 text-orange-600 text-[10px] font-black uppercase rounded-xl hover:bg-orange-600 hover:text-white transition-all">Cancelar</button>
-                                  {/* FIXED: Removed incorrect 'id:' label in function call */}
                                   <button onClick={() => handleCompleteAppointment(a.id)} className="px-3 py-2 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-xl hover:bg-emerald-600 hover:text-white transition-all">Concluir</button>
                                 </>
                               )}
@@ -1048,6 +1072,32 @@ const App: React.FC = () => {
                 {dashTab === 'profile' && (
                   <div className="space-y-6">
                     <h3 className="text-2xl font-black text-slate-900 tracking-tight">Configurações Básicas</h3>
+                    
+                    {/* Link Exclusivo Section */}
+                    <div className="bg-indigo-600 p-8 rounded-[40px] shadow-xl text-white space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                        </div>
+                        <h4 className="text-lg font-black tracking-tight">Seu Link de Agendamento</h4>
+                      </div>
+                      <p className="text-white/80 text-sm font-medium">Envie este link para seus clientes agendarem direto com você, sem passar pela busca inicial.</p>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={proPublicLink} 
+                          className="flex-1 bg-white/10 border border-white/20 rounded-2xl px-6 py-4 text-sm font-mono focus:outline-none"
+                        />
+                        <button 
+                          onClick={handleCopyLink}
+                          className="bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-50 transition-colors shadow-lg shadow-black/10"
+                        >
+                          Copiar Link
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
                       <div className="grid md:grid-cols-2 gap-6">
                         <div className="space-y-2">
@@ -1137,7 +1187,7 @@ const App: React.FC = () => {
               />
 
               <button 
-                onClick={() => {alert("Obrigado pela sua avaliação!"); setView(AppView.LANDING);}} 
+                onClick={() => {alert("Obrigado pela sua avaliação!"); handleNavigate(AppView.LANDING);}} 
                 className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
               >
                 Enviar Avaliação
@@ -1165,7 +1215,7 @@ const App: React.FC = () => {
                     />
                     <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all">Acessar Console</button>
                  </form>
-                 <button onClick={() => setView(AppView.LANDING)} className="mt-6 text-slate-600 hover:text-slate-400 text-sm font-bold">Voltar ao início</button>
+                 <button onClick={() => handleNavigate(AppView.LANDING)} className="mt-6 text-slate-600 hover:text-slate-400 text-sm font-bold">Voltar ao início</button>
               </div>
             ) : (
               <div className="bg-slate-900 p-10 md:p-14 rounded-[48px] border border-slate-800 shadow-2xl">
@@ -1237,7 +1287,7 @@ const App: React.FC = () => {
                         </div>
                       )) : <p className="text-slate-600 text-center py-8">Nenhuma instância ativa.</p>}
                     </div>
-                    <button onClick={() => setView(AppView.LANDING)} className="w-full py-4 text-slate-500 font-bold border border-slate-800 rounded-2xl hover:bg-slate-800 transition-colors">Sair do Modo Dev</button>
+                    <button onClick={() => handleNavigate(AppView.LANDING)} className="w-full py-4 text-slate-500 font-bold border border-slate-800 rounded-2xl hover:bg-slate-800 transition-colors">Sair do Modo Dev</button>
                   </div>
                 </div>
               </div>
