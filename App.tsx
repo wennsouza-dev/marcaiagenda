@@ -557,14 +557,55 @@ const App: React.FC = () => {
   const checkIsTimeAvailable = (time: string) => {
     if (!selectedProfessional) return false;
 
+    // Obtém as configurações do profissional selecionado (ou usa os padrões do estado local como fallback)
+    const config = selectedProfessional.businessHours || { 
+      weekly: weeklyHours, 
+      lunch: lunchBreak, 
+      special: specialDates 
+    };
+    const { weekly, lunch, special } = config;
+
+    // 1. Verificar Datas Especiais (Maior prioridade: bloqueio total ou horários customizados)
+    const specialDay = special?.find((s: any) => s.date === selectedDate);
+    if (specialDay) {
+      if (specialDay.closed) return false;
+      // Se houver horários definidos para esta data especial, valida contra eles
+      if (specialDay.from && specialDay.to) {
+        if (time < specialDay.from || time > specialDay.to) return false;
+      }
+    }
+
+    // 2. Verificar Expediente Semanal (se não houver uma data especial definida)
+    // Parse da data selecionada garantindo que seja tratada como data local/meio-dia para pegar o dia da semana correto
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day, 12, 0, 0);
+    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const currentDayName = dayNames[dateObj.getDay()];
+    
+    const weeklyDayConfig = weekly?.find((w: any) => w.day === currentDayName);
+    
+    // Se o dia não estiver ativo no expediente semanal e não for uma data especial configurada como aberta
+    if (!specialDay && (!weeklyDayConfig || !weeklyDayConfig.active)) return false;
+
+    // Validar se o horário está dentro da faixa de expediente (prioridade para customização de data especial)
+    const activeFrom = specialDay?.from || weeklyDayConfig?.from || '09:00';
+    const activeTo = specialDay?.to || weeklyDayConfig?.to || '18:00';
+    if (time < activeFrom || time > activeTo) return false;
+
+    // 3. Verificar Pausa para Almoço
+    if (lunch?.enabled) {
+      if (time >= lunch.from && time < lunch.to) return false;
+    }
+
+    // 4. Bloqueio por Horário de Brasília (Se a data selecionada for HOJE)
     if (selectedDate === brDateStr) {
       const [h, m] = time.split(':').map(Number);
       const nowH = brTime.getHours();
       const nowM = brTime.getMinutes();
-      if (h < nowH) return false;
-      if (h === nowH && m <= nowM) return false;
+      if (h < nowH || (h === nowH && m <= nowM)) return false;
     }
 
+    // 5. Verificar Agendamentos Existentes
     const isTaken = [...appointments, ...preBookings].some(a => 
       a.professionalId === selectedProfessional.id && 
       a.date === selectedDate && 
@@ -737,7 +778,7 @@ const App: React.FC = () => {
                                  const dStr = `${dYear}-${dMonth}-${dDay}`;
                                  
                                  return (
-                                   <button key={dStr} onClick={() => setSelectedDate(dStr)} className={`min-w-[70px] p-4 rounded-2xl flex flex-col items-center border transition-all ${selectedDate === dStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl' : 'bg-white border-transparent text-slate-400 hover:border-indigo-200'}`}>
+                                   <button key={dStr} onClick={() => {setSelectedDate(dStr); setSelectedTime(null);}} className={`min-w-[70px] p-4 rounded-2xl flex flex-col items-center border transition-all ${selectedDate === dStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl' : 'bg-white border-transparent text-slate-400 hover:border-indigo-200'}`}>
                                       <span className="text-[9px] font-black uppercase">{d.toLocaleDateString('pt-BR', {weekday: 'short'})}</span>
                                       <span className="text-lg font-black">{d.getDate()}</span>
                                    </button>
@@ -1180,7 +1221,7 @@ const App: React.FC = () => {
               </div>
 
               <textarea 
-                placeholder="Conte-nos como foi sua experiência (opcional)" 
+                placeholder="Conte-nos como foi sua experiênca (opcional)" 
                 className="w-full bg-slate-50 border-none rounded-[24px] p-6 text-sm mb-6 h-32 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                 value={reviewComment}
                 onChange={e => setReviewComment(e.target.value)}
