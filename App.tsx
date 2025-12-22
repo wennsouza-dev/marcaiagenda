@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Layout from './components/Layout.tsx';
 import ProfessionalCard from './components/ProfessionalCard.tsx';
-import { Professional, AppView, Service } from './types.ts';
+import { Professional, AppView, Service, Appointment } from './types.ts';
 import { supabase } from './lib/supabase.ts';
 
 const App: React.FC = () => {
@@ -43,12 +43,33 @@ const App: React.FC = () => {
 
   // Estados do Dashboard
   const [dashTab, setDashTab] = useState<'appointments' | 'pre_bookings' | 'profile' | 'hours' | 'gallery'>('appointments');
-  const [appointments, setAppointments] = useState<any[]>([
-    { id: '1', professionalId: 'mock-1', clientName: 'Ricardo Silva', serviceName: 'Corte Degradê', time: '14:30', status: 'confirmed' }
+  
+  // Agendamentos em memória (Para o MVP)
+  const [appointments, setAppointments] = useState<Appointment[]>([
+    { id: '1', professionalId: 'mock-1', clientName: 'Ricardo Silva', clientPhone: '32988729033', serviceName: 'Corte Degradê', date: '2023-12-25', time: '14:30', status: 'confirmed' }
   ]);
-  const [preBookings, setPreBookings] = useState<any[]>([
-    { id: '3', professionalId: 'mock-1', clientName: 'Marcos Oliveira', serviceName: 'Barba e Toalha Quente', time: '10:00', status: 'pending' }
+  const [preBookings, setPreBookings] = useState<Appointment[]>([
+    { id: '3', professionalId: 'mock-1', clientName: 'Marcos Oliveira', clientPhone: '32988729033', serviceName: 'Barba e Toalha Quente', date: '2023-12-26', time: '10:00', status: 'pending' }
   ]);
+
+  // Configuração de orientação de pré-agendamento
+  const [preBookingOrientation, setPreBookingOrientation] = useState('Para garantir seu horário, solicitamos o pagamento antecipado de 50% do valor via PIX. Por favor, envie o comprovante para confirmar.');
+
+  // Estados de Horários
+  const [weeklyHours, setWeeklyHours] = useState([
+    { day: 'Segunda', active: true, from: '09:00', to: '18:00' },
+    { day: 'Terça', active: true, from: '09:00', to: '18:00' },
+    { day: 'Quarta', active: true, from: '09:00', to: '18:00' },
+    { day: 'Quinta', active: true, from: '09:00', to: '18:00' },
+    { day: 'Sexta', active: true, from: '09:00', to: '18:00' },
+    { day: 'Sábado', active: false, from: '09:00', to: '12:00' },
+    { day: 'Domingo', active: false, from: '09:00', to: '12:00' },
+  ]);
+
+  const [lunchBreak, setLunchBreak] = useState({ enabled: true, from: '12:00', to: '13:00' });
+  const [specialDates, setSpecialDates] = useState<{ id: string; date: string; closed: boolean; from?: string; to?: string }[]>([]);
+  const [showSpecialDateForm, setShowSpecialDateForm] = useState(false);
+  const [newSpecialDate, setNewSpecialDate] = useState({ date: '', closed: false, from: '09:00', to: '18:00' });
 
   // Dados do Cliente (Agendamento)
   const [clientName, setClientName] = useState('');
@@ -61,6 +82,10 @@ const App: React.FC = () => {
 
   // Formulário de Serviço
   const [serviceForm, setServiceForm] = useState<Partial<Service> | null>(null);
+
+  // Estado de Avaliação
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
 
   const fetchProfessionals = async () => {
     setLoading(true);
@@ -277,11 +302,104 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteAppointment = (id: string, isPre: boolean) => {
-    if (confirm("Deseja realmente excluir este agendamento?")) {
-      if (isPre) setPreBookings(prev => prev.filter(a => a.id !== id));
+  const formatDateBR = (dateStr: string) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const sendWhatsApp = (phone: string, message: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) return;
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
+  // --- LÓGICA DE AGENDAMENTOS ---
+
+  const handleConfirmAppointment = (id: string) => {
+    const app = appointments.find(a => a.id === id) || preBookings.find(a => a.id === id);
+    if (!app || !loggedProfessional) return;
+
+    const updatedApp: Appointment = { ...app, status: 'confirmed' };
+    
+    setPreBookings(prev => prev.filter(a => a.id !== id));
+    setAppointments(prev => {
+      const exists = prev.find(a => a.id === id);
+      if (exists) return prev.map(a => a.id === id ? updatedApp : a);
+      return [updatedApp, ...prev];
+    });
+    
+    const msg = `Olá ${app.clientName}, aqui é ${loggedProfessional.name}! Passando para CONFIRMAR seu agendamento de *${app.serviceName}* no dia *${formatDateBR(app.date)}* às *${app.time}*. Te aguardamos!`;
+    sendWhatsApp(app.clientPhone || '', msg);
+  };
+
+  const handleCancelAppointment = (id: string) => {
+    const app = appointments.find(a => a.id === id) || preBookings.find(a => a.id === id);
+    if (!app || !loggedProfessional) return;
+
+    if (confirm("Deseja realmente CANCELAR este agendamento? O horário será liberado para outros clientes.")) {
+      const updatedApp: Appointment = { ...app, status: 'cancelled' };
+      
+      setAppointments(prev => prev.map(a => a.id === id ? updatedApp : a));
+      setPreBookings(prev => prev.map(a => a.id === id ? updatedApp : a));
+      
+      const msg = `Olá ${app.clientName}, aqui é ${loggedProfessional.name}. Infelizmente precisei CANCELAR seu horário de *${app.serviceName}* no dia *${formatDateBR(app.date)}* às *${app.time}*. O horário já está disponível para novos agendamentos no link. Desculpe o transtorno!`;
+      sendWhatsApp(app.clientPhone || '', msg);
+    }
+  };
+
+  const handleCompleteAppointment = (id: string) => {
+    const app = appointments.find(a => a.id === id);
+    if (!app || !loggedProfessional) return;
+
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'concluded' } : a));
+    
+    const reviewLink = `${window.location.origin}/?view=review&id=${app.id}&pro=${loggedProfessional.slug}`;
+    const msg = `Olá ${app.clientName}, aqui é ${loggedProfessional.name}. Obrigado pela preferência! Sua opinião é muito importante. Poderia avaliar meu serviço no link abaixo?\n\n${reviewLink}`;
+    sendWhatsApp(app.clientPhone || '', msg);
+  };
+
+  const handleDeleteAppointment = (id: string, isFromPre: boolean) => {
+    if (confirm("Deseja realmente EXCLUIR este agendamento do histórico?")) {
+      if (isFromPre) setPreBookings(prev => prev.filter(a => a.id !== id));
       else setAppointments(prev => prev.filter(a => a.id !== id));
     }
+  };
+
+  const handleMoveToPreBooking = (id: string) => {
+    const app = appointments.find(a => a.id === id);
+    if (!app) return;
+
+    const updatedApp: Appointment = { ...app, status: 'pending' };
+    setAppointments(prev => prev.filter(a => a.id !== id));
+    setPreBookings(prev => [updatedApp, ...prev]);
+    alert("Agendamento movido para a aba de Pré-agendamentos.");
+  };
+
+  const handleSendPreBookingOrientation = (app: Appointment) => {
+    if (!loggedProfessional) return;
+    const msg = `Olá ${app.clientName}, aqui é ${loggedProfessional.name}! Recebi sua solicitação de agendamento de *${app.serviceName}* no dia *${formatDateBR(app.date)}* às *${app.time}*. Seguem as orientações para confirmação: \n\n${preBookingOrientation}`;
+    sendWhatsApp(app.clientPhone || '', msg);
+  };
+
+  // --- LÓGICA DE HORÁRIOS ---
+
+  const handleUpdateWeeklyDay = (index: number, field: string, value: any) => {
+    const newWeekly = [...weeklyHours];
+    newWeekly[index] = { ...newWeekly[index], [field]: value };
+    setWeeklyHours(newWeekly);
+  };
+
+  const handleAddSpecialDate = () => {
+    if (!newSpecialDate.date) return;
+    setSpecialDates([...specialDates, { id: Math.random().toString(36).substr(2, 9), ...newSpecialDate }]);
+    setNewSpecialDate({ date: '', closed: false, from: '09:00', to: '18:00' });
+    setShowSpecialDateForm(false);
+  };
+
+  const handleRemoveSpecialDate = (id: string) => {
+    setSpecialDates(specialDates.filter(d => d.id !== id));
   };
 
   const handleSelectProfessional = (p: Professional) => {
@@ -298,32 +416,28 @@ const App: React.FC = () => {
       return;
     }
 
-    const dateFormatted = new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR');
+    const dateFormatted = formatDateBR(selectedDate);
     const cleanWhatsapp = selectedProfessional.whatsapp?.replace(/\D/g, '') || '5511999999999';
-    const message = `Olá ${selectedProfessional.name}, gostaria de agendar: *${selectedService.name}* para o dia *${dateFormatted}* às *${selectedTime}*. Meu nome é ${clientName}. Está confirmado?`;
-    const whatsappUrl = `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(message)}`;
+    const message = `Olá ${selectedProfessional.name}, gostaria de agendar: *${selectedService.name}* para o dia *${dateFormatted}* às *${selectedTime}*. Meu nome é ${clientName}. Está disponível?`;
     
-    // NOVO: Adicionar ao estado global de agendamentos para aparecer no painel do profissional
-    const newAppointment = {
+    const newAppointment: Appointment = {
       id: Math.random().toString(36).substr(2, 9),
       professionalId: selectedProfessional.id,
       clientName: clientName,
+      clientPhone: clientPhone,
       serviceName: selectedService.name,
       time: selectedTime,
       date: selectedDate,
-      status: 'confirmed'
+      status: 'pending' 
     };
     
-    setAppointments(prev => [newAppointment, ...prev]);
-
-    window.open(whatsappUrl, '_blank');
+    setPreBookings(prev => [newAppointment, ...prev]);
+    sendWhatsApp(cleanWhatsapp, message);
     
-    // Limpar estados do formulário
     setClientName('');
     setClientPhone('');
     setSelectedService(null);
     setSelectedTime(null);
-    
     setView(AppView.CLIENTS);
   };
 
@@ -570,19 +684,35 @@ const App: React.FC = () => {
                       {appointments
                         .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
                         .map(a => (
-                        <div key={a.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-600">{a.clientName[0]}</div>
-                            <div>
-                              <h5 className="font-bold text-slate-900">{a.clientName}</h5>
-                              <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName}</p>
+                        <div key={a.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between group gap-6">
+                          <div className="flex items-center gap-4 w-full">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold ${a.status === 'concluded' ? 'bg-emerald-50 text-emerald-600' : a.status === 'cancelled' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>{a.clientName[0]}</div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h5 className="font-bold text-slate-900">{a.clientName}</h5>
+                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tighter ${a.status === 'confirmed' ? 'bg-indigo-50 text-indigo-600' : a.status === 'pending' ? 'bg-amber-50 text-amber-600' : a.status === 'concluded' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{a.status}</span>
+                              </div>
+                              <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName} • {a.clientPhone}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-6">
-                            <div className="text-right">
-                              <p className="text-sm font-black text-indigo-600">{a.date === new Date().toISOString().split('T')[0] ? 'Hoje' : a.date}, {a.time}</p>
+                          
+                          <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
+                            <p className="text-sm font-black text-indigo-600 whitespace-nowrap">{formatDateBR(a.date)}, {a.time}</p>
+                            <div className="flex items-center gap-2">
+                              {a.status === 'pending' && (
+                                <button onClick={() => handleConfirmAppointment(a.id)} className="px-3 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-indigo-700 transition-all">Confirmar</button>
+                              )}
+                              {a.status !== 'cancelled' && a.status !== 'concluded' && (
+                                <>
+                                  <button onClick={() => handleCancelAppointment(a.id)} className="px-3 py-2 bg-orange-50 text-orange-600 text-[10px] font-black uppercase rounded-xl hover:bg-orange-600 hover:text-white transition-all">Cancelar</button>
+                                  <button onClick={() => handleCompleteAppointment(a.id)} className="px-3 py-2 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-xl hover:bg-emerald-600 hover:text-white transition-all">Concluir</button>
+                                </>
+                              )}
+                              {a.status === 'confirmed' && (
+                                <button onClick={() => handleMoveToPreBooking(a.id)} className="px-3 py-2 bg-amber-50 text-amber-600 text-[10px] font-black uppercase rounded-xl hover:bg-amber-600 hover:text-white transition-all">Mover para Pré</button>
+                              )}
+                              <button onClick={() => handleDeleteAppointment(a.id, false)} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all" title="Excluir"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                             </div>
-                            <button onClick={() => handleDeleteAppointment(a.id, false)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                           </div>
                         </div>
                       ))}
@@ -595,27 +725,181 @@ const App: React.FC = () => {
 
                 {dashTab === 'pre_bookings' && (
                   <div className="space-y-6">
-                    <h3 className="text-2xl font-black text-slate-900">Pré-agendamentos</h3>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <h3 className="text-2xl font-black text-slate-900">Pré-agendamentos</h3>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-100 p-6 rounded-[32px] space-y-4">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                        <h4 className="font-bold text-amber-900 text-sm">Configuração de Orientação</h4>
+                      </div>
+                      <p className="text-[11px] text-amber-700 font-medium leading-relaxed">Este texto será enviado ao cliente quando você clicar no botão "Enviar Orientação". Ideal para cobranças de sinal ou regras específicas.</p>
+                      <textarea 
+                        className="w-full bg-white border border-amber-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-amber-500 outline-none h-24 transition-all"
+                        value={preBookingOrientation}
+                        onChange={(e) => setPreBookingOrientation(e.target.value)}
+                        placeholder="Ex: Para confirmar, solicitamos o pagamento de 50% via PIX..."
+                      />
+                    </div>
+
                     <div className="grid gap-4">
                       {preBookings
                         .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
-                        .length > 0 ? preBookings
-                        .filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1')
                         .map(a => (
-                        <div key={a.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm flex items-center justify-between">
-                          <div className="flex items-center gap-4">
+                        <div key={a.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                          <div className="flex items-center gap-4 w-full">
                             <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center font-bold text-amber-600">{a.clientName[0]}</div>
-                            <div>
+                            <div className="flex-1">
                               <h5 className="font-bold text-slate-900">{a.clientName}</h5>
-                              <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName}</p>
+                              <p className="text-xs text-slate-400 font-bold uppercase">{a.serviceName} • {a.clientPhone}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <button onClick={() => {setAppointments([...appointments, {...a, status: 'confirmed'}]); setPreBookings(preBookings.filter(p => p.id !== a.id))}} className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
-                            <button onClick={() => handleDeleteAppointment(a.id, true)} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                          
+                          <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
+                            <p className="text-sm font-black text-amber-600 whitespace-nowrap">{formatDateBR(a.date)}, {a.time}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button onClick={() => handleSendPreBookingOrientation(a)} className="px-4 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-100">Enviar Orientação</button>
+                              <button onClick={() => handleConfirmAppointment(a.id)} className="px-4 py-2 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-xl hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100">Confirmar</button>
+                              <button onClick={() => handleCancelAppointment(a.id)} className="px-4 py-2 bg-orange-50 text-orange-600 text-[10px] font-black uppercase rounded-xl hover:bg-orange-600 hover:text-white transition-all border border-orange-100">Cancelar</button>
+                              <button onClick={() => handleDeleteAppointment(a.id, true)} className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                            </div>
                           </div>
                         </div>
-                      )) : <div className="py-12 text-center text-slate-400">Nenhum pré-agendamento pendente.</div>}
+                      ))}
+                      {preBookings.filter(a => a.professionalId === loggedProfessional.id || a.professionalId === 'mock-1').length === 0 && (
+                        <div className="py-12 text-center text-slate-400 font-medium">Nenhum pré-agendamento pendente.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {dashTab === 'hours' && (
+                  <div className="space-y-6 animate-in fade-in duration-500">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-2xl font-black text-slate-900">Configuração de Horários</h3>
+                      <button className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase shadow-lg shadow-indigo-100">Salvar Alterações</button>
+                    </div>
+
+                    {/* Horário Semanal */}
+                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                        <h4 className="font-black text-slate-900">Expediente Semanal</h4>
+                      </div>
+                      
+                      <div className="divide-y divide-slate-50">
+                        {weeklyHours.map((day, idx) => (
+                          <div key={day.day} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 min-w-[140px]">
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={day.active} onChange={e => handleUpdateWeeklyDay(idx, 'active', e.target.checked)} className="sr-only peer" />
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                              </label>
+                              <span className={`font-bold ${day.active ? 'text-slate-900' : 'text-slate-400'}`}>{day.day}</span>
+                            </div>
+                            
+                            {day.active ? (
+                              <div className="flex items-center gap-3">
+                                <input type="time" value={day.from} onChange={e => handleUpdateWeeklyDay(idx, 'from', e.target.value)} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500" />
+                                <span className="text-slate-400 font-bold text-xs">até</span>
+                                <input type="time" value={day.to} onChange={e => handleUpdateWeeklyDay(idx, 'to', e.target.value)} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500" />
+                              </div>
+                            ) : (
+                              <span className="text-xs font-black text-slate-300 uppercase tracking-widest italic">Fechado / Não atende</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Horário de Almoço */}
+                    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg></div>
+                          <h4 className="font-black text-slate-900">Pausa para Almoço</h4>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" checked={lunchBreak.enabled} onChange={e => setLunchBreak({...lunchBreak, enabled: e.target.checked})} className="sr-only peer" />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                      </div>
+                      
+                      {lunchBreak.enabled ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 animate-in slide-in-from-top-2">
+                          <p className="text-sm text-slate-500 font-medium">Bloquear agenda entre:</p>
+                          <div className="flex items-center gap-3">
+                            <input type="time" value={lunchBreak.from} onChange={e => setLunchBreak({...lunchBreak, from: e.target.value})} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-500" />
+                            <span className="text-slate-400 font-bold text-xs">e</span>
+                            <input type="time" value={lunchBreak.to} onChange={e => setLunchBreak({...lunchBreak, to: e.target.value})} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-500" />
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-400 italic">Sem pausa configurada no sistema.</p>
+                      )}
+                    </div>
+
+                    {/* Horários Especiais */}
+                    <div className="bg-slate-900 p-8 rounded-[40px] border border-slate-800 shadow-2xl space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-slate-800 text-indigo-400 rounded-lg flex items-center justify-center"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
+                          <h4 className="font-black text-white text-lg">Horários Especiais</h4>
+                        </div>
+                        <button onClick={() => setShowSpecialDateForm(!showSpecialDateForm)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-colors">
+                          {showSpecialDateForm ? 'Cancelar' : '+ Adicionar Data'}
+                        </button>
+                      </div>
+
+                      {showSpecialDateForm && (
+                        <div className="bg-slate-800 p-6 rounded-3xl space-y-4 animate-in zoom-in-95">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Data</label>
+                              <input type="date" value={newSpecialDate.date} onChange={e => setNewSpecialDate({...newSpecialDate, date: e.target.value})} className="w-full bg-slate-950 border-none rounded-xl px-4 py-2 text-white text-sm" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Status</label>
+                              <select value={newSpecialDate.closed ? 'closed' : 'open'} onChange={e => setNewSpecialDate({...newSpecialDate, closed: e.target.value === 'closed'})} className="w-full bg-slate-950 border-none rounded-xl px-4 py-2 text-white text-sm outline-none">
+                                <option value="open">Aberto (Horário Diferente)</option>
+                                <option value="closed">Fechado (Folga/Feriado)</option>
+                              </select>
+                            </div>
+                            {!newSpecialDate.closed && (
+                              <>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Das</label>
+                                  <input type="time" value={newSpecialDate.from} onChange={e => setNewSpecialDate({...newSpecialDate, from: e.target.value})} className="w-full bg-slate-950 border-none rounded-xl px-4 py-2 text-white text-sm" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Até</label>
+                                  <input type="time" value={newSpecialDate.to} onChange={e => setNewSpecialDate({...newSpecialDate, to: e.target.value})} className="w-full bg-slate-950 border-none rounded-xl px-4 py-2 text-white text-sm" />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <button onClick={handleAddSpecialDate} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">Adicionar Exceção</button>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        {specialDates.length > 0 ? specialDates.map(sd => (
+                          <div key={sd.id} className="bg-slate-950/50 p-5 rounded-2xl flex items-center justify-between border border-slate-800">
+                            <div>
+                              <p className="text-white font-bold">{formatDateBR(sd.date)}</p>
+                              <p className={`text-[10px] font-black uppercase tracking-widest ${sd.closed ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {sd.closed ? 'Fechado' : `Aberto: ${sd.from} - ${sd.to}`}
+                              </p>
+                            </div>
+                            <button onClick={() => handleRemoveSpecialDate(sd.id)} className="p-2 text-slate-500 hover:text-red-400 transition-colors">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
+                        )) : (
+                          <p className="text-center text-slate-600 text-sm py-4">Nenhuma data especial configurada.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -686,6 +970,37 @@ const App: React.FC = () => {
                   </div>
                 )}
               </main>
+            </div>
+          </div>
+        )}
+
+        {view === AppView.REVIEW && (
+          <div className="flex items-center justify-center min-h-[70vh] animate-in zoom-in-95 duration-500">
+            <div className="bg-white p-12 rounded-[48px] shadow-2xl border border-slate-100 w-full max-w-lg text-center">
+              <h2 className="text-3xl font-black text-slate-900 mb-2">Avalie o Serviço</h2>
+              <p className="text-slate-500 mb-8 font-medium">Sua opinião nos ajuda a crescer.</p>
+              
+              <div className="flex justify-center gap-4 mb-8">
+                {[1,2,3,4,5].map(star => (
+                  <button key={star} onClick={() => setReviewRating(star)} className="transition-transform active:scale-90">
+                    <svg className={`w-12 h-12 ${star <= reviewRating ? 'text-amber-400' : 'text-slate-200'}`} fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                  </button>
+                ))}
+              </div>
+
+              <textarea 
+                placeholder="Conte-nos como foi sua experiência (opcional)" 
+                className="w-full bg-slate-50 border-none rounded-[24px] p-6 text-sm mb-6 h-32 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                value={reviewComment}
+                onChange={e => setReviewComment(e.target.value)}
+              />
+
+              <button 
+                onClick={() => {alert("Obrigado pela sua avaliação!"); setView(AppView.LANDING);}} 
+                className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
+              >
+                Enviar Avaliação
+              </button>
             </div>
           </div>
         )}

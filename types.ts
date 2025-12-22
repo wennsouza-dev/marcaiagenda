@@ -34,7 +34,7 @@ export interface Appointment {
   professionalId: string;
   clientName: string;
   clientPhone?: string;
-  serviceId: string;
+  serviceId?: string;
   serviceName?: string;
   date: string;
   time: string;
@@ -48,5 +48,6 @@ export enum AppView {
   PROFESSIONAL_PROFILE = 'pro_profile',
   PROFESSIONAL_LOGIN = 'pro_login',
   PROFESSIONAL_DASHBOARD = 'pro_dashboard',
-  DEVELOPER_PANEL = 'dev_panel'
+  DEVELOPER_PANEL = 'dev_panel',
+  REVIEW = 'review'
 }
