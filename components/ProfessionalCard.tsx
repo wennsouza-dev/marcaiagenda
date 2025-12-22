@@ -12,12 +12,18 @@ const ProfessionalCard: React.FC<ProfessionalCardProps> = ({ professional, onSel
     <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100 hover:shadow-xl hover:border-indigo-100 transition-all duration-300 flex flex-col items-center text-center group">
       {/* Foto de Perfil com Moldura Clássica */}
       <div className="relative mb-6">
-        <div className="w-28 h-28 rounded-full p-1 border-2 border-indigo-100 group-hover:border-indigo-500 transition-colors duration-300">
-          <img 
-            src={professional.imageUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop'} 
-            alt={professional.name} 
-            className="w-full h-full object-cover rounded-full shadow-inner"
-          />
+        <div className="w-28 h-28 rounded-full p-1 border-2 border-indigo-100 group-hover:border-indigo-500 transition-colors duration-300 flex items-center justify-center overflow-hidden bg-slate-50">
+          {professional.imageUrl ? (
+            <img 
+              src={professional.imageUrl} 
+              alt={professional.name} 
+              className="w-full h-full object-cover rounded-full shadow-inner"
+            />
+          ) : (
+            <div className="w-full h-full bg-indigo-50 flex items-center justify-center text-indigo-300 text-3xl font-black rounded-full">
+              {professional.name.charAt(0).toUpperCase()}
+            </div>
+          )}
         </div>
         {/* Badge de Rating */}
         <div className="absolute -bottom-1 -right-1 bg-white shadow-md border border-slate-100 px-2 py-0.5 rounded-full flex items-center gap-1">

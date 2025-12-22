@@ -134,17 +134,17 @@ const App: React.FC = () => {
           category: p.category,
           city: p.city,
           bio: p.bio || '',
-          imageUrl: p.image_url,
+          imageUrl: p.image_url || '',
           rating: p.rating || 5.0,
-          services: p.services || [],
-          salonName: p.salon_name,
+          services: Array.isArray(p.services) ? p.services : [],
+          salonName: p.salon_name || '',
           gallery: p.gallery || [],
-          whatsapp: p.whatsapp,
-          address: p.address,
-          expireDays: p.expire_days,
-          resetWord: p.reset_word,
-          password: p.password,
-          businessHours: p.business_hours
+          whatsapp: p.whatsapp || '',
+          address: p.address || '',
+          expireDays: p.expire_days || 30,
+          resetWord: p.reset_word || '',
+          password: p.password || '',
+          businessHours: p.business_hours || {}
         }));
         setProfessionals(mappedData);
         return mappedData;
@@ -230,6 +230,9 @@ const App: React.FC = () => {
         expire_days: newPro.expireDays,
         reset_word: newPro.resetWord,
         category: 'Barbearia',
+        image_url: '', // REMOVIDO PADRÃO HARCODED
+        services: [],
+        business_hours: {}
       };
 
       if (editingProId) {
@@ -237,8 +240,6 @@ const App: React.FC = () => {
         if (error) throw error;
         alert("Profissional atualizado com sucesso!");
       } else {
-        proData.image_url = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop';
-        proData.services = [];
         const { error } = await supabase.from('professionals').insert([proData]);
         if (error) throw error;
         alert(`Profissional cadastrado com sucesso!\nLogin: ${slug}@marcai.dev`);
@@ -584,7 +585,7 @@ const App: React.FC = () => {
   const checkIsTimeAvailable = (time: string) => {
     if (!selectedProfessional) return false;
 
-    // Obtém as configurações do profissional selecionado (para evitar usar estados compartilhados de login)
+    // Obtém as configurações do profissional selecionado
     const config = selectedProfessional.businessHours || { 
       weekly: INITIAL_WEEKLY_HOURS, 
       lunch: INITIAL_LUNCH_BREAK, 
@@ -592,17 +593,16 @@ const App: React.FC = () => {
     };
     const { weekly, lunch, special } = config;
 
-    // 1. Verificar Datas Especiais (Maior prioridade: bloqueio total ou horários customizados)
+    // 1. Verificar Datas Especiais
     const specialDay = special?.find((s: any) => s.date === selectedDate);
     if (specialDay) {
       if (specialDay.closed) return false;
-      // Se houver horários definidos para esta data especial, valida contra eles
       if (specialDay.from && specialDay.to) {
         if (time < specialDay.from || time > specialDay.to) return false;
       }
     }
 
-    // 2. Verificar Expediente Semanal (se não houver uma data especial definida)
+    // 2. Verificar Expediente Semanal
     const [year, month, day] = selectedDate.split('-').map(Number);
     const dateObj = new Date(year, month - 1, day, 12, 0, 0);
     const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -621,7 +621,7 @@ const App: React.FC = () => {
       if (time >= lunch.from && time < lunch.to) return false;
     }
 
-    // 4. Bloqueio por Horário de Brasília (Se a data selecionada for HOJE)
+    // 4. Bloqueio por Horário de Brasília
     if (selectedDate === brDateStr) {
       const [h, m] = time.split(':').map(Number);
       const nowH = brTime.getHours();
@@ -630,14 +630,14 @@ const App: React.FC = () => {
     }
 
     // 5. Verificar Agendamentos Existentes
-    const isTaken = ![...appointments, ...preBookings].some(a => 
+    const isTaken = [...appointments, ...preBookings].some(a => 
       a.professionalId === selectedProfessional.id && 
       a.date === selectedDate && 
       a.time === time &&
       a.status !== 'cancelled'
     );
     
-    if (!isTaken) return false;
+    if (isTaken) return false;
 
     return true;
   };
@@ -733,11 +733,19 @@ const App: React.FC = () => {
                </div>
 
                <div className="p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
-                 <img 
-                    src={selectedProfessional.imageUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop'} 
-                    className="w-40 h-40 md:w-56 md:h-56 rounded-[48px] object-cover shadow-2xl border-4 border-white" 
-                    alt={selectedProfessional.name} 
-                  />
+                 <div className="w-40 h-40 md:w-56 md:h-56 rounded-[48px] overflow-hidden shadow-2xl border-4 border-white bg-slate-50 flex items-center justify-center">
+                    {selectedProfessional.imageUrl ? (
+                      <img 
+                         src={selectedProfessional.imageUrl} 
+                         className="w-full h-full object-cover" 
+                         alt={selectedProfessional.name} 
+                       />
+                    ) : (
+                      <div className="w-full h-full bg-indigo-50 flex items-center justify-center text-indigo-200 text-6xl font-black">
+                        {selectedProfessional.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                 </div>
                  <div className="text-center md:text-left flex-1">
                     <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 inline-block">{selectedProfessional.category}</span>
                     <h1 className="text-4xl font-black text-slate-900 mb-2">{selectedProfessional.name}</h1>
@@ -906,7 +914,7 @@ const App: React.FC = () => {
                     <h3 className="text-2xl font-black text-slate-900">Próximos Agendamentos</h3>
                     <div className="grid gap-4">
                       {appointments
-                        .filter(a => a.professionalId === loggedProfessional.id) // Filtro rigoroso: apenas do profissional logado
+                        .filter(a => a.professionalId === loggedProfessional.id)
                         .map(a => (
                         <div key={a.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between group gap-6">
                           <div className="flex items-center gap-4 w-full">
@@ -969,7 +977,7 @@ const App: React.FC = () => {
 
                     <div className="grid gap-4">
                       {preBookings
-                        .filter(a => a.professionalId === loggedProfessional.id) // Filtro rigoroso: apenas do profissional logado
+                        .filter(a => a.professionalId === loggedProfessional.id)
                         .map(a => (
                         <div key={a.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
                           <div className="flex items-center gap-4 w-full">
