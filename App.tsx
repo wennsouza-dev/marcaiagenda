@@ -345,15 +345,15 @@ const App: React.FC = () => {
 
       if (error) throw error;
       
-      // Sincroniza a lista global de profissionais para que a aba de agendamento veja as mudanças
+      // Sincroniza a lista global de profissionais
       setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? { ...loggedProfessional } : p));
       
-      // Sincroniza o perfil selecionado (Cliente) para refletir a nova foto/serviços instantaneamente
-      if (selectedProfessional?.id === loggedProfessional.id) {
+      // Sincroniza o perfil selecionado (CLIENTE) se ele for o mesmo logado
+      if (selectedProfessional && selectedProfessional.id === loggedProfessional.id) {
         setSelectedProfessional({ ...loggedProfessional });
       }
 
-      alert("Alterações de perfil salvas com sucesso!");
+      alert("Alterações salvas com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar no banco: " + err.message);
     } finally {
@@ -381,11 +381,15 @@ const App: React.FC = () => {
       } else {
         const updatedPro = { ...loggedProfessional, businessHours: businessHoursConfig };
         setLoggedProfessional(updatedPro);
-        // Sincroniza a lista global e o perfil selecionado para o cliente
+        
+        // Sincroniza a lista global de profissionais
         setProfessionals(prev => prev.map(p => p.id === loggedProfessional.id ? updatedPro : p));
-        if (selectedProfessional?.id === loggedProfessional.id) {
+        
+        // Sincroniza o perfil selecionado (CLIENTE) se ele for o mesmo logado
+        if (selectedProfessional && selectedProfessional.id === loggedProfessional.id) {
           setSelectedProfessional(updatedPro);
         }
+
         alert("Configurações de horários salvas com sucesso!");
       }
     } catch (err: any) {
@@ -626,14 +630,14 @@ const App: React.FC = () => {
     }
 
     // 5. Verificar Agendamentos Existentes
-    const isTaken = [...appointments, ...preBookings].some(a => 
+    const isTaken = ![...appointments, ...preBookings].some(a => 
       a.professionalId === selectedProfessional.id && 
       a.date === selectedDate && 
       a.time === time &&
       a.status !== 'cancelled'
     );
     
-    if (isTaken) return false;
+    if (!isTaken) return false;
 
     return true;
   };
