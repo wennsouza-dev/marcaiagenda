@@ -25,8 +25,8 @@ export interface Professional {
   whatsapp?: string;
   address?: string;
   customLink?: string;
-  // Added password property to match database fields and fix type error in login logic
   password?: string;
+  business_hours?: any; // Configurações de expediente, almoço e datas especiais
 }
 
 export interface Appointment {

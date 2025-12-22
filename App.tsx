@@ -6,15 +6,51 @@ import { Professional, AppView, Service, Appointment } from './types.ts';
 import { supabase } from './lib/supabase.ts';
 
 const App: React.FC = () => {
+  // Função auxiliar para obter a data/hora atual de Brasília
+  const getBrasiliaNow = () => {
+    const now = new Date();
+    return new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  };
+
   const [view, setView] = useState<AppView>(AppView.LANDING);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  
+  // Inicializa a data selecionada com a data CORRETA de Brasília (YYYY-MM-DD)
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const brNow = getBrasiliaNow();
+    const year = brNow.getFullYear();
+    const month = String(brNow.getMonth() + 1).padStart(2, '0');
+    const day = String(brNow.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   
+  // Estado do Horário de Brasília atualizado a cada segundo
+  const [brTime, setBrTime] = useState(getBrasiliaNow());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setBrTime(getBrasiliaNow());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const brTimeFormatted = useMemo(() => {
+    return brTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }, [brTime]);
+
+  const brDateStr = useMemo(() => {
+    const year = brTime.getFullYear();
+    const month = String(brTime.getMonth() + 1).padStart(2, '0');
+    const day = String(brTime.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, [brTime]);
+
   // Estado do Profissional Logado
   const [loggedProfessional, setLoggedProfessional] = useState<Professional | null>(null);
 
@@ -109,7 +145,8 @@ const App: React.FC = () => {
           address: p.address,
           expireDays: p.expire_days,
           resetWord: p.reset_word,
-          password: p.password
+          password: p.password,
+          business_hours: p.business_hours // Carrega as configurações de horários do banco
         })));
       }
     } catch (err) {
@@ -229,6 +266,13 @@ const App: React.FC = () => {
     setTimeout(() => {
       if (proFound) {
         setLoggedProfessional(proFound);
+        // Carrega configurações de horários salvas no banco
+        if (proFound.business_hours) {
+          const { weekly, lunch, special } = proFound.business_hours as any;
+          if (weekly) setWeeklyHours(weekly);
+          if (lunch) setLunchBreak(lunch);
+          if (special) setSpecialDates(special);
+        }
         setIsLoggedIn(true);
         setView(AppView.PROFESSIONAL_DASHBOARD);
         setEmail('');
@@ -270,6 +314,34 @@ const App: React.FC = () => {
       alert("Alterações salvas com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar no banco: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- LÓGICA DE SALVAR HORÁRIOS NO BANCO ---
+  const handleSaveHours = async () => {
+    if (!loggedProfessional) return;
+    setLoading(true);
+
+    const businessHoursConfig = {
+      weekly: weeklyHours,
+      lunch: lunchBreak,
+      special: specialDates
+    };
+
+    try {
+      const { error } = await supabase.from('professionals').update({
+        business_hours: businessHoursConfig
+      }).eq('id', loggedProfessional.id);
+
+      if (error) throw error;
+      
+      // Atualiza o estado local do profissional
+      setLoggedProfessional({ ...loggedProfessional, business_hours: businessHoursConfig });
+      alert("Configurações de horários salvas com sucesso!");
+    } catch (err: any) {
+      alert("Erro ao salvar horários: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -441,17 +513,47 @@ const App: React.FC = () => {
     setView(AppView.CLIENTS);
   };
 
+  // Gera os próximos 15 dias a partir de HOJE em Brasília
   const nextDays = useMemo(() => {
     const days = [];
+    const baseDate = getBrasiliaNow();
+    // Zera horas para evitar pulos indesejados no loop
+    baseDate.setHours(0, 0, 0, 0);
+
     for (let i = 0; i < 15; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
+      const d = new Date(baseDate);
+      d.setDate(baseDate.getDate() + i);
       days.push(d);
     }
     return days;
-  }, []);
+  }, [brDateStr]); // Recalcula se a data de Brasília mudar
 
   const timeSlots = ["09:00", "09:45", "10:30", "11:15", "14:00", "14:45", "15:30", "16:15", "17:00"];
+
+  const checkIsTimeAvailable = (time: string) => {
+    if (!selectedProfessional) return false;
+
+    // 1. Bloqueio por Horário de Brasília (Hoje)
+    if (selectedDate === brDateStr) {
+      const [h, m] = time.split(':').map(Number);
+      const nowH = brTime.getHours();
+      const nowM = brTime.getMinutes();
+      if (h < nowH) return false;
+      if (h === nowH && m <= nowM) return false;
+    }
+
+    // 2. Bloqueio por Agendamento Existente (Confirmado ou Pendente)
+    const isTaken = [...appointments, ...preBookings].some(a => 
+      a.professionalId === selectedProfessional.id && 
+      a.date === selectedDate && 
+      a.time === time &&
+      a.status !== 'cancelled'
+    );
+    
+    if (isTaken) return false;
+
+    return true;
+  };
 
   return (
     <Layout activeView={view} onNavigate={handleNavigate} isLoggedIn={isLoggedIn}>
@@ -524,7 +626,14 @@ const App: React.FC = () => {
                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                Voltar
              </button>
-             <div className="bg-white rounded-[48px] overflow-hidden border border-slate-100 shadow-xl">
+             <div className="bg-white rounded-[48px] overflow-hidden border border-slate-100 shadow-xl relative">
+               
+               {/* Relógio de Brasília Transparente */}
+               <div className="absolute top-6 right-8 text-right opacity-30 pointer-events-none select-none">
+                 <p className="text-[9px] font-black uppercase tracking-tighter text-slate-400">Brasília Time</p>
+                 <p className="text-xl font-mono font-black text-slate-900">{brTimeFormatted}</p>
+               </div>
+
                <div className="p-8 md:p-12 flex flex-col md:flex-row items-center gap-8">
                  <img 
                     src={selectedProfessional.imageUrl} 
@@ -589,7 +698,11 @@ const App: React.FC = () => {
                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Escolha a Data</p>
                            <div className="flex gap-2 overflow-x-auto pb-4">
                               {nextDays.map(d => {
-                                 const dStr = d.toISOString().split('T')[0];
+                                 const dYear = d.getFullYear();
+                                 const dMonth = String(d.getMonth() + 1).padStart(2, '0');
+                                 const dDay = String(d.getDate()).padStart(2, '0');
+                                 const dStr = `${dYear}-${dMonth}-${dDay}`;
+                                 
                                  return (
                                    <button key={dStr} onClick={() => setSelectedDate(dStr)} className={`min-w-[70px] p-4 rounded-2xl flex flex-col items-center border transition-all ${selectedDate === dStr ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl' : 'bg-white border-transparent text-slate-400 hover:border-indigo-200'}`}>
                                       <span className="text-[9px] font-black uppercase">{d.toLocaleDateString('pt-BR', {weekday: 'short'})}</span>
@@ -602,9 +715,22 @@ const App: React.FC = () => {
                         <div className="space-y-4">
                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Horário</p>
                            <div className="grid grid-cols-3 gap-2">
-                             {timeSlots.map(t => (
-                               <button key={t} onClick={() => setSelectedTime(t)} className={`py-3 rounded-xl text-xs font-black border transition-all ${selectedTime === t ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white border-transparent text-slate-500 hover:border-indigo-200'}`}>{t}</button>
-                             ))}
+                             {timeSlots.map(t => {
+                               const available = checkIsTimeAvailable(t);
+                               return (
+                                 <button 
+                                   key={t} 
+                                   disabled={!available}
+                                   onClick={() => setSelectedTime(t)} 
+                                   className={`py-3 rounded-xl text-xs font-black border transition-all 
+                                     ${!available ? 'bg-slate-100 text-slate-300 cursor-not-allowed border-slate-200 line-through' : 
+                                       selectedTime === t ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 
+                                       'bg-white border-transparent text-slate-500 hover:border-indigo-200'}`}
+                                 >
+                                   {t}
+                                 </button>
+                               );
+                             })}
                            </div>
                         </div>
                      </div>
@@ -778,7 +904,13 @@ const App: React.FC = () => {
                   <div className="space-y-6 animate-in fade-in duration-500">
                     <div className="flex items-center justify-between">
                       <h3 className="text-2xl font-black text-slate-900">Configuração de Horários</h3>
-                      <button className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase shadow-lg shadow-indigo-100">Salvar Alterações</button>
+                      <button 
+                        onClick={handleSaveHours}
+                        className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+                        disabled={loading}
+                      >
+                        {loading ? 'Salvando...' : 'Salvar Alterações'}
+                      </button>
                     </div>
 
                     {/* Horário Semanal */}
@@ -801,9 +933,9 @@ const App: React.FC = () => {
                             
                             {day.active ? (
                               <div className="flex items-center gap-3">
-                                <input type="time" value={day.from} onChange={e => handleUpdateWeeklyDay(idx, 'from', e.target.value)} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500" />
+                                <input type="time" value={day.from} onChange={e => handleUpdateWeeklyDay(idx, 'from', e.target.value)} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                                 <span className="text-slate-400 font-bold text-xs">até</span>
-                                <input type="time" value={day.to} onChange={e => handleUpdateWeeklyDay(idx, 'to', e.target.value)} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500" />
+                                <input type="time" value={day.to} onChange={e => handleUpdateWeeklyDay(idx, 'to', e.target.value)} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                               </div>
                             ) : (
                               <span className="text-xs font-black text-slate-300 uppercase tracking-widest italic">Fechado / Não atende</span>
@@ -830,9 +962,9 @@ const App: React.FC = () => {
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4 animate-in slide-in-from-top-2">
                           <p className="text-sm text-slate-500 font-medium">Bloquear agenda entre:</p>
                           <div className="flex items-center gap-3">
-                            <input type="time" value={lunchBreak.from} onChange={e => setLunchBreak({...lunchBreak, from: e.target.value})} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-500" />
+                            <input type="time" value={lunchBreak.from} onChange={e => setLunchBreak({...lunchBreak, from: e.target.value})} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-500 outline-none" />
                             <span className="text-slate-400 font-bold text-xs">e</span>
-                            <input type="time" value={lunchBreak.to} onChange={e => setLunchBreak({...lunchBreak, to: e.target.value})} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-500" />
+                            <input type="time" value={lunchBreak.to} onChange={e => setLunchBreak({...lunchBreak, to: e.target.value})} className="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-500 outline-none" />
                           </div>
                         </div>
                       ) : (
@@ -956,11 +1088,11 @@ const App: React.FC = () => {
                         <div className="space-y-3">
                            {loggedProfessional.services.map((s) => (
                              <div key={s.id} className="bg-slate-50 p-6 rounded-2xl flex items-center justify-between border border-transparent hover:border-indigo-100 transition-all group">
-                                <div><p className="font-bold text-slate-900">{s.name}</p><p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">R$ {s.price},00 • {s.duration} min</p></div>
-                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => handleOpenServiceForm(s)} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                                  <button onClick={() => handleDeleteService(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                </div>
+                               <div><p className="font-bold text-slate-900">{s.name}</p><p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">R$ {s.price},00 • {s.duration} min</p></div>
+                               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                 <button onClick={() => handleOpenServiceForm(s)} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                                 <button onClick={() => handleDeleteService(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                               </div>
                              </div>
                            ))}
                         </div>
